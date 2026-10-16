@@ -1,0 +1,20 @@
+.item-video{width:100%;height:100%;display:block;pointer-events:none}
+.item-text{width:100%;height:100%;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.2;overflow:hidden;pointer-events:none;user-select:none}
+.media-thumb video,.media-thumb canvas{width:100%;height:100%;object-fit:contain;pointer-events:none}
+.media-error{position:absolute;inset:0;display:grid;place-items:center;background:#171a22e8;color:#ffc1c7;padding:12px;text-align:center;font-size:22px}
+.text-properties,.video-properties{display:flex;flex-direction:column;gap:12px}
+.text-properties h3,.video-properties h3{margin-bottom:0}
+.property-label textarea,.property-label select,.text-format-buttons select{font:11px Inter,system-ui,sans-serif;letter-spacing:0;color:#e9eaf0;background:#11141b;border:1px solid #303645;border-radius:6px;padding:8px;width:100%;min-width:0}
+.property-label textarea{resize:vertical;line-height:1.5;min-height:80px}
+.text-format-buttons{display:flex;gap:6px}
+.text-format-buttons button{width:32px;flex-shrink:0;border:1px solid #303645;border-radius:5px}
+.text-format-buttons button.active{background:#8c70ff30;border-color:#8c70ff;color:#d1c5ff}
+.color-field{display:flex;align-items:center;justify-content:space-between;font-size:10px;color:#b2b9ca;gap:8px}
+.color-field input{width:40px;height:30px;padding:3px;border-radius:5px;cursor:pointer}
+.check-field{display:flex;align-items:center;gap:8px;font-size:10px;color:#b2b9ca}
+.check-field input{accent-color:#8c70ff;box-shadow:none}
+.property-note{font-size:10px;color:#8895ac;line-height:1.6;margin:0}
+.media-fit{margin-top:16px}
+.video-actions{display:flex;flex-wrap:wrap;gap:6px}
+.video-actions .secondary-button{font-size:10px;flex:1;padding:7px}
+.text-properties .number-field>span{min-width:90px}

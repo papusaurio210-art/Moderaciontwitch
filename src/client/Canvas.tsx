@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { ImagePlus, LockKeyhole, Scan, Upload } from 'lucide-react';
-import { clamp, intersectsStage, type ImageItem, type ItemPatch } from '../shared/model';
-import { ImageContent, itemStyle } from './components';
+import { clamp, intersectsStage, type Item, type ItemPatch } from '../shared/model';
+import { ItemContent, itemStyle } from './components';
 import type { RoomConnection } from './useRoom';
 
 export interface View { x: number; y: number; zoom: number }
@@ -47,7 +47,7 @@ export function Canvas({ room, selectedId, select, view, setView, grid, hand, fi
     node.addEventListener('wheel', wheel, { passive: false }); return () => node.removeEventListener('wheel', wheel);
   }, [setView]);
 
-  function dragItem(event: ReactPointerEvent, item: ImageItem, mode: 'move' | 'resize' | 'rotate' = 'move') {
+  function dragItem(event: ReactPointerEvent, item: Item, mode: 'move' | 'resize' | 'rotate' = 'move') {
     if (hand || space || event.button === 1) return;
     event.stopPropagation();
     if (!enabled || item.locked || event.button !== 0) return;
@@ -115,7 +115,7 @@ export function Canvas({ room, selectedId, select, view, setView, grid, hand, fi
         className={`canvas-item ${selectedId === item.id ? 'selected' : ''} ${item.locked ? 'locked' : ''}`}
         style={{ ...itemStyle(item), '--handle-scale': 1 / view.zoom } as React.CSSProperties}
         onPointerDown={e => dragItem(e, item)}>
-        <ImageContent roomId={state.roomId} item={item} media={state.media.find(m => m.id === item.mediaId)} />
+        <ItemContent roomId={state.roomId} item={item} media={item.type === 'text' ? undefined : state.media.find(m => m.id === item.mediaId)} editor active={intersectsStage(item, state.stage)} serverOffset={room.serverOffset} />
         {selectedId === item.id && <>
           <div className="selection-border" style={{ borderWidth: 1.5 / view.zoom }} />
           <div className="selection-label">{item.locked && <LockKeyhole size={10} />}{!intersectsStage(item, state.stage) ? 'Fuera del escenario' : item.name}</div>
@@ -128,11 +128,11 @@ export function Canvas({ room, selectedId, select, view, setView, grid, hand, fi
       </div>)}
     </div>
     {state.items.length === 0 && <div className="empty-stage"><span className="empty-art"><ImagePlus size={30} strokeWidth={1.3} /></span>
-      <h2>El escenario es tuyo</h2><p>Arrastra tu primera imagen al lienzo<br />y dale personalidad a tu directo.</p>
-      <button className="secondary-button" onPointerDown={e => e.stopPropagation()} onClick={chooseFile} disabled={!enabled}><Upload size={14} />Añadir imagen</button>
-      <span className="empty-formats">PNG, JPG O WEBP · HASTA 25 MB</span>
+      <h2>El escenario es tuyo</h2><p>Arrastra un archivo al lienzo<br />y dale personalidad a tu directo.</p>
+      <button className="secondary-button" onPointerDown={e => e.stopPropagation()} onClick={chooseFile} disabled={!enabled}><Upload size={14} />Añadir archivo</button>
+      <span className="empty-formats">IMÁGENES Y GIF · MP4 Y WEBM</span>
     </div>}
-    {draggingFile && <div className="drop-veil"><Upload size={30} /><strong>Suelta tu imagen aquí</strong></div>}
+    {draggingFile && <div className="drop-veil"><Upload size={30} /><strong>Suelta tu archivo aquí</strong></div>}
     <div className="canvas-hint"><Scan size={13} />Rueda para zoom<span>·</span>Espacio + arrastrar para navegar</div>
   </div>;
 }

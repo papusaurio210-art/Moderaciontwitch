@@ -1,6 +1,7 @@
 import { Room } from './room';
 import { bearer, HttpError, json, smallJson } from './http';
 import { randomHex, sha256, viewerKeyFromEditor } from '../shared/keys';
+import { byteRange } from './range';
 
 export { Room };
 export interface Env {
@@ -44,7 +45,8 @@ export default {
       }
       const media = url.pathname.match(/^\/media\/([a-f0-9]{32})\/([a-f0-9-]{36})$/);
       if (media && ['GET', 'HEAD'].includes(request.method)) {
-        const object = await env.MEDIA.get(`rooms/${media[1]}/${media[2]}`);
+        const key = `rooms/${media[1]}/${media[2]}`;
+        const object = await env.MEDIA.head(key);
         if (!object) throw new HttpError(404, 'Archivo no encontrado.');
         const headers = new Headers({
           'Content-Type': object.httpMetadata?.contentType ?? 'application/octet-stream',
@@ -52,9 +54,25 @@ export default {
           'ETag': object.httpEtag, 'Content-Length': String(object.size),
           'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'",
           'Referrer-Policy': 'no-referrer',
+          'Accept-Ranges': 'bytes',
         });
         if (request.headers.get('If-None-Match') === object.httpEtag) return new Response(null, { status: 304, headers });
-        return new Response(request.method === 'HEAD' ? null : object.body, { headers });
+        if (request.method === 'HEAD') return new Response(null, { headers });
+        const rangeHeader = request.headers.get('Range');
+        const ifRange = request.headers.get('If-Range');
+        const useRange = rangeHeader && (!ifRange || ifRange === object.httpEtag);
+        const range = useRange ? byteRange(rangeHeader, object.size) : undefined;
+        if (range === null) {
+          headers.set('Content-Range', `bytes */${object.size}`); headers.set('Content-Length', '0');
+          return new Response(null, { status: 416, headers });
+        }
+        const data = await env.MEDIA.get(key, range ? { range } : undefined);
+        if (!data) throw new HttpError(404, 'Archivo no encontrado.');
+        if (range) {
+          headers.set('Content-Range', `bytes ${range.offset}-${range.offset + range.length - 1}/${object.size}`);
+          headers.set('Content-Length', String(range.length));
+        }
+        return new Response(data.body, { status: range ? 206 : 200, headers });
       }
       if (/^\/(api|ws|media)(\/|$)/.test(url.pathname)) throw new HttpError(404, 'Ruta no encontrada.');
       return env.ASSETS.fetch(request);

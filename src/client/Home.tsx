@@ -26,7 +26,7 @@ export function Home() {
           <div className="demo-card"><Sparkles size={28} /><strong>Tu próximo gran momento.</strong><span>Diseña lo que viene después.</span><i /><i /><i /><i /></div>
           <div className="demo-cursor"><svg viewBox="0 0 24 24"><path d="M4 2 20 14 12 15 9 22Z" /></svg><span>Editor</span></div>
         </div><div className="demo-chip"><Radio size={13} />Cambios en tiempo real</div></div>
-        <div className="home-features"><span><Image size={17} />Tus imágenes</span><span><Layers size={17} />Control por capas</span><span><Monitor size={17} />Listo para OBS</span></div>
+        <div className="home-features"><span><Image size={17} />Imágenes, GIF y vídeo</span><span><Layers size={17} />Texto y capas</span><span><Monitor size={17} />Listo para OBS</span></div>
       </section>
       <section className="create-card"><span className="card-icon"><Layers size={24} /></span><h2>Crea tu estudio</h2><p>Un espacio propio para los gráficos de tu canal.</p>
         <form onSubmit={create}>
@@ -39,6 +39,6 @@ export function Home() {
         <div className="create-note"><Monitor size={16} /><span>La cámara y la transmisión se mantienen en tu OBS.</span></div>
       </section>
     </main>
-    <footer className="home-footer"><span>Hecho para quienes están detrás del directo.</span><span>Overlay Studio · Primera edición</span></footer>
+    <footer className="home-footer"><span>Hecho para quienes están detrás del directo.</span><span>Overlay Studio · Multimedia</span></footer>
   </div>;
 }

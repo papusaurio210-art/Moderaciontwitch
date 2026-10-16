@@ -1,10 +1,10 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './index';
-import type { ImageItem, MediaFile, Operation, Role, RoomState, ServerMessage } from '../shared/model';
-import { applyOperation } from '../shared/model';
+import type { Item, MediaFile, Operation, Role, RoomState, ServerMessage, VideoItem } from '../shared/model';
+import { applyOperation, defaultTextStyle, videoPosition } from '../shared/model';
 import { sha256 } from '../shared/keys';
 import { bearer, HttpError, json, smallJson } from './http';
-import { clientMessage, imageMime, MAX_IMAGE_BYTES, MAX_ROOM_BYTES } from './validation';
+import { clientMessage, mediaMime, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_ROOM_BYTES } from './validation';
 
 interface Attachment { role: Role | null; deadline: number; windowStart: number; messages: number }
 
@@ -117,15 +117,31 @@ export class Room extends DurableObject<Env> {
       if (msg.t === 'sync') { this.snapshot(ws, a.role, 'state'); return; }
       if (a.role !== 'editor') throw new HttpError(403, 'Este enlace solo permite visualizar.');
       const state = this.state!;
-      if (msg.t === 'item.add') {
+      if (msg.t === 'text.add') {
+        if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
+        this.commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'text', name: 'Texto',
+          text: 'Tu texto aquí', x: msg.x, y: msg.y, w: 720, h: 180, rot: 0,
+          opacity: 1, visible: true, locked: false, ...defaultTextStyle } }, msg.requestId);
+      } else if (msg.t === 'item.add') {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
         const media = state.media.find(m => m.id === msg.mediaId);
-        if (!media) throw new HttpError(404, 'La imagen no está disponible.');
+        if (!media) throw new HttpError(404, 'El archivo no está disponible.');
         const scale = Math.min(1, state.stage.w / 2 / media.width);
-        const item: ImageItem = { id: crypto.randomUUID(), type: 'image', mediaId: media.id, name: media.name,
+        const base = { id: crypto.randomUUID(), mediaId: media.id, name: media.name,
           x: msg.x, y: msg.y, w: media.width * scale, h: media.height * scale, rot: 0,
-          opacity: 1, visible: true, locked: false };
+          opacity: 1, visible: true, locked: false, fit: 'contain' as const };
+        const item: Item = media.mime.startsWith('video/')
+          ? { ...base, type: 'video', loop: true, muted: true, playing: true, position: 0, startedAt: Date.now() }
+          : { ...base, type: media.mime === 'image/gif' ? 'gif' : 'image' };
         this.commit({ t: 'item.upsert', item }, msg.requestId);
+      } else if (msg.t === 'video.control') {
+        const item = state.items.find(i => i.id === msg.id);
+        if (!item || item.type !== 'video') throw new HttpError(400, 'Selecciona un vídeo para controlar su reproducción.');
+        const now = Date.now(), duration = state.media.find(m => m.id === item.mediaId)?.duration ?? 0;
+        const position = msg.action === 'restart' ? 0 : videoPosition(item, now, duration);
+        const next: VideoItem = { ...item, position: msg.action === 'play' && duration > 0 && position >= duration ? 0 : position,
+          playing: msg.action !== 'pause', startedAt: msg.action === 'pause' ? null : now };
+        this.commit({ t: 'item.upsert', item: next }, msg.requestId);
       } else if (msg.t === 'item.reorder') {
         if (msg.ids.length !== state.items.length || new Set(msg.ids).size !== state.items.length
           || msg.ids.some(id => !state.items.some(i => i.id === id))) throw new HttpError(400, 'El orden de capas no es válido.');
@@ -137,7 +153,19 @@ export class Room extends DurableObject<Env> {
         else {
           if (item.locked && Object.keys(msg.patch).some(k => ['x', 'y', 'w', 'h', 'rot'].includes(k))) throw new HttpError(409, 'Desbloquea el elemento antes de moverlo.');
           if (msg.t === 'item.preview') this.broadcast({ t: 'preview', id: item.id, patch: msg.patch }, ws);
-          else this.commit({ t: 'item.upsert', item: { ...item, ...msg.patch } }, msg.requestId);
+          else {
+            const textFields = ['text', ...Object.keys(defaultTextStyle)];
+            if (Object.keys(msg.patch).some(k => (textFields.includes(k) && item.type !== 'text')
+              || (['loop', 'muted'].includes(k) && item.type !== 'video') || (k === 'fit' && item.type === 'text'))) {
+              throw new HttpError(400, 'Estas propiedades no corresponden al tipo de elemento.');
+            }
+            let next = { ...item, ...msg.patch } as Item;
+            if (item.type === 'video' && next.type === 'video' && msg.patch.loop !== undefined) {
+              const now = Date.now(), duration = state.media.find(m => m.id === item.mediaId)?.duration ?? 0;
+              next = { ...next, position: videoPosition(item, now, duration), startedAt: item.playing ? now : null };
+            }
+            this.commit({ t: 'item.upsert', item: next }, msg.requestId);
+          }
         }
       }
     } catch (error) {
@@ -157,29 +185,42 @@ export class Room extends DurableObject<Env> {
     if (!token || await sha256(token) !== this.editorHash) throw new HttpError(403, 'Se requiere acceso de editor.');
     const size = Number(request.headers.get('Content-Length'));
     if (!Number.isInteger(size) || size < 1) throw new HttpError(411, 'El archivo debe indicar su tamaño.');
-    if (size > MAX_IMAGE_BYTES) {
+    const declaredVideo = ['video/mp4', 'video/webm'].includes(request.headers.get('Content-Type') ?? '');
+    if (size > (declaredVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES)) {
       // Drain without buffering so an in-flight HTTP upload receives the 413
       // response reliably through the local Worker/DO transport.
       await request.body?.pipeTo(new WritableStream());
-      throw new HttpError(413, 'La imagen supera el límite de 25 MB.');
+      throw new HttpError(413, declaredVideo ? 'El vídeo supera el límite de 50 MB.' : 'La imagen o GIF supera el límite de 25 MB.');
     }
     const width = Number(request.headers.get('X-Image-Width')), height = Number(request.headers.get('X-Image-Height'));
-    if (![width, height].every(n => Number.isInteger(n) && n > 0 && n <= 16384)) throw new HttpError(400, 'Dimensiones de imagen no válidas (máximo 16384 px).');
+    if (![width, height].every(n => Number.isInteger(n) && n > 0 && n <= 16384)) throw new HttpError(400, 'Dimensiones no válidas (máximo 16384 px).');
     let name: string;
     try { name = decodeURIComponent(request.headers.get('X-File-Name') ?? 'Imagen').trim().slice(0, 120); }
     catch { throw new HttpError(400, 'Nombre de archivo no válido.'); }
     if (!request.body) throw new HttpError(400, 'Falta el archivo.');
     const reader = request.body.getReader();
+    const rejectUpload = async (status: number, message: string): Promise<never> => {
+      while (!(await reader.read()).done) { /* Complete the forwarded body without buffering. */ }
+      throw new HttpError(status, message);
+    };
     const chunks: Uint8Array[] = []; let prefixLength = 0;
-    while (prefixLength < 32) { const next = await reader.read(); if (next.done) break; chunks.push(next.value); prefixLength += next.value.length; }
+    while (prefixLength < 4096) { const next = await reader.read(); if (next.done) break; chunks.push(next.value); prefixLength += next.value.length; }
     const prefix = new Uint8Array(prefixLength); let offset = 0;
     for (const chunk of chunks) { prefix.set(chunk, offset); offset += chunk.length; }
-    const mime = imageMime(prefix);
-    if (!mime) { await reader.cancel(); throw new HttpError(415, 'Usa una imagen PNG, JPG o WebP válida.'); }
+    const mime = mediaMime(prefix);
+    if (!mime) return await rejectUpload(415, 'Usa un archivo PNG, JPG, WebP, GIF, MP4 o WebM válido.');
+    const isVideo = mime.startsWith('video/');
+    if (!isVideo && size > MAX_IMAGE_BYTES) {
+      return await rejectUpload(413, 'La imagen o GIF supera el límite de 25 MB.');
+    }
+    const duration = isVideo ? Number(request.headers.get('X-Media-Duration')) : undefined;
+    if (isVideo && (!Number.isFinite(duration) || duration! <= 0 || duration! > 86400)) {
+      return await rejectUpload(400, 'El vídeo debe tener una duración válida de hasta 24 horas.');
+    }
     this.ctx.storage.sql.exec('DELETE FROM uploads WHERE created_at < ?', Date.now() - 600_000);
     const pending = this.ctx.storage.sql.exec<{ count: number; bytes: number }>('SELECT COUNT(*) AS count, COALESCE(SUM(bytes),0) AS bytes FROM uploads').one();
     if (this.state!.media.length + pending.count >= 500 || this.state!.media.reduce((n, m) => n + m.size, 0) + pending.bytes + size > MAX_ROOM_BYTES) {
-      await reader.cancel(); throw new HttpError(409, 'La biblioteca alcanzó su límite de archivos o espacio.');
+      return await rejectUpload(409, 'La biblioteca alcanzó su límite de archivos o espacio.');
     }
     const id = crypto.randomUUID(), r2Key = `rooms/${this.state!.roomId}/${id}`;
     this.ctx.storage.sql.exec('INSERT INTO uploads VALUES (?, ?, ?)', id, size, Date.now());
@@ -195,12 +236,12 @@ export class Room extends DurableObject<Env> {
         finally { await reader.cancel().catch(() => {}); }
       })();
       await Promise.all([this.env.MEDIA.put(r2Key, stream.readable, { httpMetadata: { contentType: mime } }), pump]);
-      const media: MediaFile = { id, name: name || 'Imagen', mime, size, width, height, createdAt: Date.now() };
+      const media: MediaFile = { id, name: name || 'Archivo', mime, size, width, height, createdAt: Date.now(), ...(isVideo ? { duration } : {}) };
       this.commit({ t: 'media.add', media });
       return json(media, 201);
     } catch {
       await this.env.MEDIA.delete(r2Key);
-      throw new HttpError(400, 'No se pudo guardar la imagen. Comprueba el archivo e inténtalo de nuevo.');
+      throw new HttpError(400, 'No se pudo guardar el archivo. Compruébalo e inténtalo de nuevo.');
     } finally { this.ctx.storage.sql.exec('DELETE FROM uploads WHERE id=?', id); }
   }
 }

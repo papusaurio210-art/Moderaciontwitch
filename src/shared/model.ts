@@ -1,26 +1,45 @@
 export interface Stage { x: number; y: number; w: number; h: number }
-export interface ImageItem {
-  id: string; type: 'image'; mediaId: string; name: string;
+export interface BaseItem {
+  id: string; name: string;
   x: number; y: number; w: number; h: number; rot: number;
   opacity: number; visible: boolean; locked: boolean;
 }
-export type ItemPatch = Partial<Pick<ImageItem, 'name' | 'x' | 'y' | 'w' | 'h' | 'rot' | 'opacity' | 'visible' | 'locked'>>;
+export type Fit = 'contain' | 'cover' | 'fill';
+export interface ImageItem extends BaseItem { type: 'image' | 'gif'; mediaId: string; fit?: Fit }
+export interface VideoItem extends BaseItem {
+  type: 'video'; mediaId: string; fit: Fit;
+  loop: boolean; muted: boolean; playing: boolean; position: number; startedAt: number | null;
+}
+export interface TextStyle {
+  fontFamily: 'Inter' | 'JetBrains Mono' | 'Arial' | 'Georgia'; fontSize: number;
+  color: string; bold: boolean; italic: boolean; align: 'left' | 'center' | 'right';
+  strokeColor: string; strokeWidth: number; shadow: boolean; background: string | null;
+}
+export interface TextItem extends BaseItem, TextStyle { type: 'text'; text: string }
+export type Item = ImageItem | VideoItem | TextItem;
+export type ItemPatch = Partial<Omit<BaseItem, 'id'> & TextStyle & { text: string; fit: Fit; loop: boolean; muted: boolean }>;
+export const defaultTextStyle: TextStyle = {
+  fontFamily: 'Inter', fontSize: 64, color: '#ffffff', bold: true, italic: false, align: 'left',
+  strokeColor: '#000000', strokeWidth: 0, shadow: false, background: null,
+};
 export interface MediaFile {
   id: string; name: string; mime: string; size: number;
-  width: number; height: number; createdAt: number;
+  width: number; height: number; createdAt: number; duration?: number;
 }
 export interface RoomState {
   roomId: string; name: string; rev: number; stage: Stage;
-  items: ImageItem[]; media: MediaFile[];
+  items: Item[]; media: MediaFile[];
 }
 export type Role = 'editor' | 'viewer';
 export type EditCommand =
   | { t: 'item.add'; mediaId: string; x: number; y: number }
+  | { t: 'text.add'; x: number; y: number }
+  | { t: 'video.control'; id: string; action: 'play' | 'pause' | 'restart' }
   | { t: 'item.patch'; id: string; patch: ItemPatch }
   | { t: 'item.remove'; id: string }
   | { t: 'item.reorder'; ids: string[] };
 export type Operation =
-  | { t: 'item.upsert'; item: ImageItem }
+  | { t: 'item.upsert'; item: Item }
   | { t: 'item.remove'; id: string }
   | { t: 'item.reorder'; ids: string[] }
   | { t: 'media.add'; media: MediaFile };
@@ -41,7 +60,7 @@ export function applyOperation(state: RoomState, op: Operation, rev: number): Ro
   }
 }
 
-export function intersectsStage(item: ImageItem, stage: Stage): boolean {
+export function intersectsStage(item: BaseItem, stage: Stage): boolean {
   const a = item.rot * Math.PI / 180;
   const w = Math.abs(item.w * Math.cos(a)) + Math.abs(item.h * Math.sin(a));
   const h = Math.abs(item.w * Math.sin(a)) + Math.abs(item.h * Math.cos(a));
@@ -52,3 +71,9 @@ export function intersectsStage(item: ImageItem, stage: Stage): boolean {
 
 export const mediaUrl = (roomId: string, id: string) => `/media/${roomId}/${id}`;
 export const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+export function videoPosition(item: VideoItem, now: number, duration: number): number {
+  const elapsed = item.position + (item.playing && item.startedAt !== null ? Math.max(0, now - item.startedAt) / 1000 : 0);
+  if (!Number.isFinite(duration) || duration <= 0) return elapsed;
+  return item.loop ? elapsed % duration : Math.min(duration, elapsed);
+}

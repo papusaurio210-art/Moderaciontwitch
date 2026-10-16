@@ -70,13 +70,31 @@ try {
   });
   assert.equal(uploaded.status, 201); const media = await uploaded.json();
   await socket(page, room, { t: 'item.add', mediaId: media.id, x: 321, y: 123 });
-  const before = await socket(page, room); assert.equal(before.rev, 2);
+  const text = await socket(page, room, { t: 'text.add', x: 80, y: 90 });
+  await socket(page, room, { t: 'item.patch', id: text.op.item.id, patch: { text: 'Texto persistente', color: '#12efab', italic: true } });
+  const additionalFiles = [];
+  for (const [extension, mime] of [['gif', 'image/gif'], ['mp4', 'video/mp4']]) {
+    const bytes = readFileSync(`tests/fixtures/motion.${extension}`);
+    const response = await fetch(`${origin}/api/rooms/${room.roomId}/media`, { method: 'POST', headers: {
+      Authorization: `Bearer ${room.editorKey}`, 'Content-Type': mime, 'X-Image-Width': extension === 'gif' ? '96' : '160',
+      'X-Image-Height': extension === 'gif' ? '54' : '90', 'X-Media-Duration': '6',
+    }, body: bytes });
+    assert.equal(response.status, 201); const file = await response.json(); additionalFiles.push({ id: file.id, bytes });
+    const added = await socket(page, room, { t: 'item.add', mediaId: file.id, x: 400, y: 300 });
+    if (extension === 'mp4') await socket(page, room, { t: 'video.control', id: added.op.item.id, action: 'pause' });
+  }
+  const before = await socket(page, room); assert.equal(before.rev, 9);
+  assert.equal(before.items.find(item => item.type === 'video').playing, false);
   await page.close(); await stop(); await start();
   const restoredPage = await browser.newPage(); await restoredPage.goto(origin);
   assert.deepEqual(await socket(restoredPage, room), before, 'La sala debe conservarse tras reiniciar el proceso.');
   const restoredImage = await fetch(`${origin}/media/${room.roomId}/${media.id}`);
   assert.equal(restoredImage.status, 200);
   assert.deepEqual(Buffer.from(await restoredImage.arrayBuffer()), image, 'R2 debe conservar los bytes originales.');
+  for (const file of additionalFiles) {
+    const response = await fetch(`${origin}/media/${room.roomId}/${file.id}`);
+    assert.equal(response.status, 200); assert.deepEqual(Buffer.from(await response.arrayBuffer()), file.bytes);
+  }
   const html = await fetch(origin);
   assert.match(html.headers.get('content-security-policy') ?? '', /default-src 'self'/);
   assert.equal(html.headers.get('referrer-policy'), 'no-referrer');
@@ -84,7 +102,7 @@ try {
     const body = await (await fetch(origin + path)).text();
     assert.ok(!body.includes(admin) && !body.includes('export interface Env'), 'Los archivos privados no deben servirse.');
   }
-  console.log('OK: sala, revisiones e imágenes recuperadas tras un reinicio real; cabeceras y archivos privados verificados.');
+  console.log('OK: sala, imágenes, GIF, vídeo pausado y texto recuperados tras un reinicio real; cabeceras y archivos privados verificados.');
 } finally {
   await browser?.close(); await stop(); await rm(statePath, { recursive: true, force: true });
 }

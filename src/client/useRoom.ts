@@ -11,6 +11,7 @@ export function useRoom(roomId: string, key: string) {
   const [pending, setPending] = useState(0);
   const [previews, setPreviews] = useState<Record<string, ItemPatch>>({});
   const [lastAddedId, setLastAddedId] = useState('');
+  const [serverOffset, setServerOffset] = useState(0);
   const socket = useRef<WebSocket | null>(null);
   const pendingIds = useRef(new Set<string>());
   const lastPreview = useRef(0);
@@ -49,6 +50,7 @@ export function useRoom(roomId: string, key: string) {
         if (event.data === 'pong') { lastPong = Date.now(); return; }
         const msg = JSON.parse(event.data) as ServerMessage;
         if (msg.t === 'welcome' || msg.t === 'state') {
+          setServerOffset(msg.serverNow - Date.now());
           retry = 0; setStatus('connected'); if (msg.t === 'welcome') setError(''); setRole(msg.role); update(msg.state);
           pendingIds.current.clear(); setPending(0); setPreviews({});
         } else if (msg.t === 'op') {
@@ -112,6 +114,6 @@ export function useRoom(roomId: string, key: string) {
     }
   }, []);
   const rendered = state?.items.map(item => ({ ...item, ...previews[item.id] })) ?? [];
-  return { state, role, status, error, setError, presence, pending, rendered, send, preview, lastAddedId, isPreviewing: Object.keys(previews).length > 0 };
+  return { state, role, status, error, setError, presence, pending, rendered, send, preview, lastAddedId, serverOffset, isPreviewing: Object.keys(previews).length > 0 };
 }
 export type RoomConnection = ReturnType<typeof useRoom>;
