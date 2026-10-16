@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stream Overlay Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            editorBg: '#0F1115',
+            editorPanel: '#171A21',
+            editorBorder: '#262B36',
+            editorText: '#E6E8EE',
+            editorSecondary: '#8B93A7',
+            editorViolet: '#7C5CFF',
+            editorGreen: '#00E5A0',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #0F1115;
+      color: #E6E8EE;
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      user-select: none;
+    }
+    .grid-pattern {
+      background-size: 24px 24px;
+      background-image: 
+        linear-gradient(to right, rgba(38, 43, 54, 0.45) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(38, 43, 54, 0.45) 1px, transparent 1px);
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #171A21;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #262B36;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #373e4f;
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col antialiased">
+
+  <!-- 1. TOP BAR (56px tall) -->
+  <header class="h-[56px] min-h-[56px] max-h-[56px] bg-[#171A21] border-b border-[#262B36] px-4 flex items-center justify-between z-30 select-none">
+    <!-- Left: App Branding & Room Name -->
+    <div class="flex items-center gap-3 w-72">
+      <div class="w-7 h-7 rounded-[6px] bg-gradient-to-br from-[#7C5CFF] to-[#5932ea] flex items-center justify-center text-white font-bold text-xs shadow-sm shadow-[#7C5CFF]/30">
+        <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="font-semibold text-sm text-[#E6E8EE] tracking-tight">Maria's Channel</span>
+        <span class="text-xs px-1.5 py-0.5 rounded bg-[#262B36]/60 text-[#8B93A7] border border-[#262B36] font-mono">1080p</span>
+      </div>
+    </div>
+
+    <!-- Center: Status, Undo/Redo, Toggles, Zoom Controls -->
+    <div class="flex items-center gap-3">
+      <!-- Status Pill -->
+      <div class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#00E5A0]/10 border border-[#00E5A0]/30 text-[#00E5A0] text-xs font-medium">
+        <span class="w-2 h-2 rounded-full bg-[#00E5A0] animate-pulse"></span>
+        <span>Connected</span>
+      </div>
+
+      <div class="h-4 w-[1px] bg-[#262B36]"></div>
+
+      <!-- Undo / Redo -->
+      <div class="flex items-center gap-0.5">
+        <button title="Undo (Ctrl+Z)" class="w-8 h-8 rounded-[6px] flex items-center justify-center text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7v6h6"></path>
+            <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+          </svg>
+        </button>
+        <button title="Redo (Ctrl+Y)" class="w-8 h-8 rounded-[6px] flex items-center justify-center text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 7v6h-6"></path>
+            <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="h-4 w-[1px] bg-[#262B36]"></div>
+
+      <!-- Grid & Snap Toggles -->
+      <div class="flex items-center gap-1">
+        <button title="Toggle Grid" class="px-2.5 h-8 rounded-[6px] bg-[#262B36] text-[#E6E8EE] flex items-center gap-1.5 text-xs font-medium border border-[#343b49] shadow-sm">
+          <svg class="w-3.5 h-3.5 text-[#7C5CFF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="3" y1="15" x2="21" y2="15"></line>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+            <line x1="15" y1="3" x2="15" y2="21"></line>
+          </svg>
+          <span>Grid</span>
+        </button>
+        <button title="Toggle Snapping" class="px-2.5 h-8 rounded-[6px] bg-[#171A21] hover:bg-[#262B36] text-[#8B93A7] hover:text-[#E6E8EE] flex items-center gap-1.5 text-xs font-medium border border-[#262B36] transition-colors">
+          <svg class="w-3.5 h-3.5 text-[#00E5A0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+          </svg>
+          <span>Snap</span>
+        </button>
+      </div>
+
+      <div class="h-4 w-[1px] bg-[#262B36]"></div>
+
+      <!-- Zoom Controls -->
+      <div class="flex items-center gap-1.5 bg-[#0F1115] border border-[#262B36] rounded-[6px] p-0.5">
+        <button title="Zoom Out" class="w-6 h-6 rounded flex items-center justify-center text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36]">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+        <span class="text-xs font-mono font-medium text-[#E6E8EE] px-1 min-w-[38px] text-center">75%</span>
+        <button title="Zoom In" class="w-6 h-6 rounded flex items-center justify-center text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36]">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+
+      <button class="h-8 px-2.5 rounded-[6px] bg-[#262B36] hover:bg-[#2f3542] text-xs font-medium text-[#E6E8EE] border border-[#343b49] flex items-center gap-1.5 transition-colors">
+        <svg class="w-3.5 h-3.5 text-[#8B93A7]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 3 21 3 21 9"></polyline>
+          <polyline points="9 21 3 21 3 15"></polyline>
+          <line x1="21" y1="3" x2="14" y2="10"></line>
+          <line x1="3" y1="21" x2="10" y2="14"></line>
+        </svg>
+        <span>Fit to stage</span>
+      </button>
+    </div>
+
+    <!-- Right: Copy Overlay Link Button -->
+    <div class="flex items-center justify-end gap-3 w-72">
+      <button class="h-9 px-4 rounded-[6px] bg-[#7C5CFF] hover:bg-[#6f4ef8] text-white text-xs font-semibold flex items-center gap-2 shadow-sm shadow-[#7C5CFF]/30 transition-all active:scale-[0.98]">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+        <span>Copy overlay link</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE ROW -->
+  <div class="flex-1 flex overflow-hidden">
+
+    <!-- 2. LEFT TOOL RAIL (64px wide) -->
+    <aside class="w-[64px] min-w-[64px] max-w-[64px] bg-[#171A21] border-r border-[#262B36] flex flex-col items-center py-3 gap-1 z-20">
+      <!-- Select (Active) -->
+      <button title="Select Tool (V)" class="relative group w-10 h-10 rounded-[6px] bg-[#7C5CFF] text-white flex items-center justify-center shadow-sm shadow-[#7C5CFF]/30">
+        <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+          <path d="M4.5 3.5l12.5 12.5-5.2.8 3.4 6.7-2.7 1.4-3.4-6.8-4.6 4.4V3.5z"/>
+        </svg>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Select (V)</span>
+      </button>
+
+      <!-- Image/Video -->
+      <button title="Image / Video (M)" class="relative group w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Media (M)</span>
+      </button>
+
+      <!-- Text -->
+      <button title="Text Tool (T)" class="relative group w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+        <span class="font-serif font-bold text-base">T</span>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Text (T)</span>
+      </button>
+
+      <!-- Rectangle -->
+      <button title="Rectangle (R)" class="relative group w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="1"></rect>
+        </svg>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Rectangle (R)</span>
+      </button>
+
+      <!-- Ellipse -->
+      <button title="Ellipse (O)" class="relative group w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="8"></circle>
+        </svg>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Ellipse (O)</span>
+      </button>
+
+      <!-- Line -->
+      <button title="Line (L)" class="relative group w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <line x1="5" y1="19" x2="19" y2="5"></line>
+        </svg>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Line (L)</span>
+      </button>
+
+      <!-- Arrow -->
+      <button title="Arrow" class="relative group w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="19" x2="19" y2="5"></line>
+          <polyline points="10 5 19 5 19 14"></polyline>
+        </svg>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Arrow</span>
+      </button>
+
+      <!-- Timer -->
+      <button title="Stream Timer" class="relative group w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="13" r="8"></circle>
+          <line x1="12" y1="9" x2="12" y2="13"></line>
+          <line x1="12" y1="13" x2="15" y2="15"></line>
+          <line x1="10" y1="2" x2="14" y2="2"></line>
+        </svg>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Timer Widget</span>
+      </button>
+
+      <!-- Camera Guide -->
+      <button title="Camera Guide Overlay" class="relative group w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 7l-7 5 7 5V7z"></path>
+          <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+        </svg>
+        <span class="absolute left-14 bg-[#171A21] text-[#E6E8EE] border border-[#262B36] text-[10px] font-medium px-2 py-0.5 rounded shadow pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity z-50 whitespace-nowrap">Camera Guide</span>
+      </button>
+
+      <div class="mt-auto flex flex-col items-center gap-2">
+        <div class="w-8 h-[1px] bg-[#262B36]"></div>
+        <button title="Keyboard Shortcuts" class="w-10 h-10 rounded-[6px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- 3. LEFT SIDEBAR (280px wide) -->
+    <section class="w-[280px] min-w-[280px] max-w-[280px] bg-[#171A21] border-r border-[#262B36] flex flex-col z-10">
+      <!-- Tabs: Library (Active) & Layers -->
+      <div class="h-10 border-b border-[#262B36] flex px-2 pt-1 gap-1">
+        <button class="flex-1 py-1 text-xs font-semibold text-[#E6E8EE] border-b-2 border-[#7C5CFF] flex items-center justify-center gap-1.5">
+          <svg class="w-3.5 h-3.5 text-[#7C5CFF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          <span>Library</span>
+        </button>
+        <button class="flex-1 py-1 text-xs font-medium text-[#8B93A7] hover:text-[#E6E8EE] border-b-2 border-transparent hover:border-[#262B36] flex items-center justify-center gap-1.5 transition-colors">
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+          <span>Layers</span>
+          <span class="text-[10px] px-1 py-0.2 rounded bg-[#262B36] text-[#8B93A7]">7</span>
+        </button>
+      </div>
+
+      <!-- Search & Filters Container -->
+      <div class="p-3 border-b border-[#262B36] flex flex-col gap-2.5">
+        <!-- Search Field -->
+        <div class="relative">
+          <svg class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-[#8B93A7]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" placeholder="Search media assets..." value="meme" class="w-full h-8 pl-8 pr-3 bg-[#0F1115] border border-[#262B36] focus:border-[#7C5CFF] rounded-[6px] text-xs text-[#E6E8EE] placeholder-[#8B93A7] outline-none transition-colors">
+        </div>
+
+        <!-- Filter Chips: All, Image, GIF, Video -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-0.5 custom-scrollbar">
+          <button class="px-2.5 py-1 rounded-[6px] bg-[#7C5CFF] text-white text-[11px] font-semibold flex-shrink-0">All</button>
+          <button class="px-2.5 py-1 rounded-[6px] bg-[#0F1115] hover:bg-[#262B36] text-[#8B93A7] hover:text-[#E6E8EE] border border-[#262B36] text-[11px] font-medium flex-shrink-0 transition-colors">Image</button>
+          <button class="px-2.5 py-1 rounded-[6px] bg-[#0F1115] hover:bg-[#262B36] text-[#8B93A7] hover:text-[#E6E8EE] border border-[#262B36] text-[11px] font-medium flex-shrink-0 transition-colors">GIF</button>
+          <button class="px-2.5 py-1 rounded-[6px] bg-[#0F1115] hover:bg-[#262B36] text-[#8B93A7] hover:text-[#E6E8EE] border border-[#262B36] text-[11px] font-medium flex-shrink-0 transition-colors">Video</button>
+        </div>
+      </div>
+
+      <!-- 2-Column Grid of Media Thumbnails with Filenames -->
+      <div class="flex-1 overflow-y-auto p-3 custom-scrollbar">
+        <div class="grid grid-cols-2 gap-2.5">
+          <!-- Thumbnail 1 (Selected Cat Jam) -->
+          <div class="group flex flex-col gap-1 p-1 rounded-[6px] bg-[#0F1115] border-2 border-[#7C5CFF] cursor-pointer hover:border-[#7C5CFF] transition-all">
+            <div class="w-full aspect-[4/3] rounded-[4px] bg-[#1d222b] overflow-hidden relative flex items-center justify-center">
+              <!-- Visual graphic for cat jam meme -->
+              <div class="w-full h-full bg-gradient-to-tr from-amber-600/40 via-yellow-500/30 to-purple-600/40 flex items-center justify-center p-2">
+                <svg class="w-8 h-8 text-amber-300" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                </svg>
+              </div>
+              <span class="absolute top-1 right-1 text-[9px] font-mono px-1 rounded bg-black/70 text-white">GIF</span>
+            </div>
+            <span class="text-[11px] font-medium text-[#E6E8EE] truncate px-0.5">cat_vibing.gif</span>
+          </div>
+
+          <!-- Thumbnail 2 (Doge) -->
+          <div class="group flex flex-col gap-1 p-1 rounded-[6px] bg-[#0F1115] border border-[#262B36] hover:border-[#3b4354] cursor-pointer transition-all">
+            <div class="w-full aspect-[4/3] rounded-[4px] bg-[#1d222b] overflow-hidden relative flex items-center justify-center">
+              <div class="w-full h-full bg-gradient-to-tr from-yellow-700/40 via-amber-400/20 to-orange-500/40 flex items-center justify-center">
+                <span class="text-2xl">🐕</span>
+              </div>
+              <span class="absolute top-1 right-1 text-[9px] font-mono px-1 rounded bg-black/70 text-white">PNG</span>
+            </div>
+            <span class="text-[11px] font-medium text-[#8B93A7] group-hover:text-[#E6E8EE] truncate px-0.5">doge_much_wow.png</span>
+          </div>
+
+          <!-- Thumbnail 3 (Surprised Pikachu) -->
+          <div class="group flex flex-col gap-1 p-1 rounded-[6px] bg-[#0F1115] border border-[#262B36] hover:border-[#3b4354] cursor-pointer transition-all">
+            <div class="w-full aspect-[4/3] rounded-[4px] bg-[#1d222b] overflow-hidden relative flex items-center justify-center">
+              <div class="w-full h-full bg-gradient-to-br from-yellow-500/30 via-red-500/20 to-blue-500/20 flex items-center justify-center">
+                <span class="text-2xl">⚡</span>
+              </div>
+              <span class="absolute top-1 right-1 text-[9px] font-mono px-1 rounded bg-black/70 text-white">JPG</span>
+            </div>
+            <span class="text-[11px] font-medium text-[#8B93A7] group-hover:text-[#E6E8EE] truncate px-0.5">surprised_pika.png</span>
+          </div>
+
+          <!-- Thumbnail 4 (Stream Alert) -->
+          <div class="group flex flex-col gap-1 p-1 rounded-[6px] bg-[#0F1115] border border-[#262B36] hover:border-[#3b4354] cursor-pointer transition-all">
+            <div class="w-full aspect-[4/3] rounded-[4px] bg-[#1d222b] overflow-hidden relative flex items-center justify-center">
+              <div class="w-full h-full bg-gradient-to-br from-emerald-600/30 to-teal-800/40 flex items-center justify-center">
+                <span class="text-xs font-bold text-emerald-400 font-mono">NEW SUB!</span>
+              </div>
+              <span class="absolute top-1 right-1 text-[9px] font-mono px-1 rounded bg-black/70 text-white">WEBM</span>
+            </div>
+            <span class="text-[11px] font-medium text-[#8B93A7] group-hover:text-[#E6E8EE] truncate px-0.5">sub_alert_banner.webm</span>
+          </div>
+
+          <!-- Thumbnail 5 (Chat Frame) -->
+          <div class="group flex flex-col gap-1 p-1 rounded-[6px] bg-[#0F1115] border border-[#262B36] hover:border-[#3b4354] cursor-pointer transition-all">
+            <div class="w-full aspect-[4/3] rounded-[4px] bg-[#1d222b] overflow-hidden relative flex items-center justify-center">
+              <div class="w-full h-full border border-dashed border-[#7C5CFF]/60 m-2 rounded flex items-center justify-center bg-[#7C5CFF]/10">
+                <span class="text-[10px] text-[#7C5CFF] font-semibold">CHAT BOX</span>
+              </div>
+              <span class="absolute top-1 right-1 text-[9px] font-mono px-1 rounded bg-black/70 text-white">PNG</span>
+            </div>
+            <span class="text-[11px] font-medium text-[#8B93A7] group-hover:text-[#E6E8EE] truncate px-0.5">twitch_chat_frame.png</span>
+          </div>
+
+          <!-- Thumbnail 6 (Sponsor Ribbon) -->
+          <div class="group flex flex-col gap-1 p-1 rounded-[6px] bg-[#0F1115] border border-[#262B36] hover:border-[#3b4354] cursor-pointer transition-all">
+            <div class="w-full aspect-[4/3] rounded-[4px] bg-[#1d222b] overflow-hidden relative flex items-center justify-center">
+              <div class="w-full h-full bg-gradient-to-r from-cyan-600/20 to-blue-600/30 flex items-center justify-center">
+                <span class="text-xs text-cyan-300 font-bold">SPONSOR</span>
+              </div>
+              <span class="absolute top-1 right-1 text-[9px] font-mono px-1 rounded bg-black/70 text-white">SVG</span>
+            </div>
+            <span class="text-[11px] font-medium text-[#8B93A7] group-hover:text-[#E6E8EE] truncate px-0.5">sponsor_ticker.svg</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upload Button at Bottom -->
+      <div class="p-3 border-t border-[#262B36] bg-[#171A21]">
+        <button class="w-full h-9 rounded-[6px] bg-[#262B36] hover:bg-[#2e3442] text-[#E6E8EE] text-xs font-semibold flex items-center justify-center gap-2 border border-[#343b49] transition-colors">
+          <svg class="w-4 h-4 text-[#00E5A0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <span>Upload Media</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 4. CENTER CANVAS (The biggest area) -->
+    <main class="flex-1 bg-[#0F1115] grid-pattern relative overflow-hidden flex items-center justify-center">
+
+      <!-- Ruler / Coordinate guides -->
+      <div class="absolute top-0 left-0 right-0 h-4 bg-[#171A21]/70 border-b border-[#262B36]/50 flex items-center text-[9px] font-mono text-[#8B93A7] px-4 justify-between pointer-events-none">
+        <span>0px</span>
+        <span>320px</span>
+        <span>640px</span>
+        <span>960px</span>
+        <span>1280px</span>
+        <span>1600px</span>
+        <span>1920px</span>
+      </div>
+      <div class="absolute top-4 left-0 bottom-0 w-4 bg-[#171A21]/70 border-r border-[#262B36]/50 flex flex-col text-[9px] font-mono text-[#8B93A7] py-4 justify-between pointer-events-none items-center">
+        <span>0</span>
+        <span>270</span>
+        <span>540</span>
+        <span>810</span>
+        <span>1080</span>
+      </div>
+
+      <!-- Stage Container (Center) -->
+      <div class="relative">
+        
+        <!-- THE 16:9 STAGE: 2px green (#00E5A0) border, slightly lighter fill, ON AIR tag -->
+        <div class="w-[640px] h-[360px] bg-[#1a1e27] border-2 border-[#00E5A0] rounded-[4px] relative shadow-2xl shadow-black/80 overflow-hidden flex flex-col justify-between p-6">
+          
+          <!-- Green Tag 'ON AIR' on top-left corner -->
+          <div class="absolute -top-[14px] -left-[2px] bg-[#00E5A0] text-[#0F1115] font-mono text-[10px] font-extrabold px-2 py-0.5 rounded-sm flex items-center gap-1 shadow-md shadow-[#00E5A0]/20 tracking-wider">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#0F1115] animate-ping"></span>
+            <span>ON AIR</span>
+            <span class="text-[8px] opacity-70">1920×1080</span>
+          </div>
+
+          <!-- Top inside stage: Small Logo in top-left corner -->
+          <div class="flex items-center justify-between z-10">
+            <div class="flex items-center gap-2 bg-[#0F1115]/80 backdrop-blur-sm px-2.5 py-1.5 rounded-[4px] border border-[#262B36]">
+              <div class="w-5 h-5 rounded-sm bg-gradient-to-tr from-[#7C5CFF] to-[#00E5A0] flex items-center justify-center">
+                <svg class="w-3 h-3 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                  <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+                </svg>
+              </div>
+              <span class="text-xs font-bold text-white tracking-wider">MARIA.LIVE</span>
+            </div>
+
+            <!-- Stage Audio & Live indicator -->
+            <div class="flex items-center gap-2 bg-[#0F1115]/60 backdrop-blur-sm px-2 py-1 rounded text-[10px] font-mono text-[#8B93A7]">
+              <span class="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+              <span>LIVE • 60 FPS</span>
+            </div>
+          </div>
+
+          <!-- Center inside stage: 'Starting soon' in large white letters -->
+          <div class="self-center text-center my-auto z-10 flex flex-col items-center">
+            <div class="text-[11px] font-mono uppercase tracking-[0.3em] text-[#00E5A0] mb-1 font-semibold">STREAM STARTS IN A MOMENT</div>
+            <h1 class="text-4xl font-extrabold text-white tracking-tight drop-shadow-md">Starting soon</h1>
+            <p class="text-xs text-[#8B93A7] mt-1.5 font-medium">Grab some snacks and say hi in chat!</p>
+          </div>
+
+          <!-- Bottom-right inside stage: Countdown '05:00' -->
+          <div class="flex justify-between items-end z-10">
+            <div class="flex items-center gap-1.5 text-[11px] text-[#8B93A7] font-mono bg-[#0F1115]/70 px-2 py-1 rounded border border-[#262B36]/60">
+              <span class="text-white/60">@mariastreams</span>
+            </div>
+
+            <div class="flex items-center gap-2 bg-[#0F1115]/90 border border-[#262B36] rounded-[6px] px-3 py-1.5 shadow-lg">
+              <svg class="w-3.5 h-3.5 text-[#00E5A0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <span class="font-mono text-xl font-bold text-white tracking-widest">05:00</span>
+            </div>
+          </div>
+
+          <!-- Ambient Stage Background Graphic -->
+          <div class="absolute inset-0 opacity-15 pointer-events-none">
+            <div class="absolute -top-24 -right-24 w-80 h-80 rounded-full bg-[#7C5CFF] blur-3xl"></div>
+            <div class="absolute -bottom-24 -left-24 w-80 h-80 rounded-full bg-[#00E5A0] blur-3xl"></div>
+          </div>
+        </div>
+
+        <!-- OUTSIDE THE STAGE, ON THE GRID: THREE LOOSE MEME IMAGES WITH 'Off screen' BADGE -->
+        
+        <!-- Meme 1: Doge (Top Right, outside stage) -->
+        <div class="absolute -top-16 -right-32 w-28 h-24 bg-[#171A21] rounded-[6px] border border-[#262B36] p-1.5 shadow-lg flex flex-col group cursor-move hover:border-[#3a4252] transition-colors">
+          <div class="flex items-center justify-between mb-1">
+            <span class="bg-[#262B36] text-[#8B93A7] text-[8px] font-mono font-medium px-1.5 py-0.2 rounded border border-[#373e4f]">Off screen</span>
+            <span class="text-[8px] font-mono text-[#8B93A7]">180×140</span>
+          </div>
+          <div class="flex-1 bg-[#202530] rounded flex items-center justify-center overflow-hidden relative">
+            <div class="w-full h-full bg-gradient-to-br from-amber-700/30 to-yellow-500/20 flex flex-col items-center justify-center p-1 text-center">
+              <span class="text-xl">🐕</span>
+              <span class="text-[8px] font-mono text-yellow-300/80 font-bold leading-tight">SUCH STREAM</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meme 2: Surprised Pikachu (Bottom Left, outside stage) -->
+        <div class="absolute -bottom-20 -left-28 w-32 h-26 bg-[#171A21] rounded-[6px] border border-[#262B36] p-1.5 shadow-lg flex flex-col group cursor-move hover:border-[#3a4252] transition-colors">
+          <div class="flex items-center justify-between mb-1">
+            <span class="bg-[#262B36] text-[#8B93A7] text-[8px] font-mono font-medium px-1.5 py-0.2 rounded border border-[#373e4f]">Off screen</span>
+            <span class="text-[8px] font-mono text-[#8B93A7]">200×160</span>
+          </div>
+          <div class="flex-1 bg-[#202530] rounded flex items-center justify-center overflow-hidden relative">
+            <div class="w-full h-full bg-gradient-to-br from-yellow-600/30 via-red-500/20 to-black/40 flex flex-col items-center justify-center p-1 text-center">
+              <span class="text-xl">⚡😲</span>
+              <span class="text-[8px] font-mono text-white/80 font-semibold">surprised_pika</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Meme 3: SELECTED IMAGE (Cat Vibing / Cat Jam) - Placed outside bottom right of stage with Violet outline, 8 square handles & round rotation handle -->
+        <div class="absolute -bottom-16 right-12 cursor-move z-20">
+          
+          <!-- Round Rotation Handle above selected item -->
+          <div class="absolute -top-7 left-1/2 -translate-x-1/2 flex flex-col items-center">
+            <div class="w-3.5 h-3.5 rounded-full bg-[#171A21] border-2 border-[#7C5CFF] shadow flex items-center justify-center cursor-grab active:cursor-grabbing hover:scale-110 transition-transform">
+              <div class="w-1.5 h-1.5 rounded-full bg-[#7C5CFF]"></div>
+            </div>
+            <!-- Stem line connecting to the box -->
+            <div class="w-[1px] h-3.5 bg-[#7C5CFF]"></div>
+          </div>
+
+          <!-- Main Selected Card Container with 2px Violet Outline -->
+          <div class="relative w-40 h-32 bg-[#171A21] rounded-[6px] ring-2 ring-[#7C5CFF] shadow-2xl p-1.5 flex flex-col bg-[#171A21]/95 backdrop-blur-sm">
+            
+            <!-- Off screen badge -->
+            <div class="flex items-center justify-between mb-1">
+              <span class="bg-[#262B36] text-[#8B93A7] text-[8px] font-mono font-medium px-1.5 py-0.2 rounded border border-[#373e4f]">Off screen</span>
+              <span class="text-[8px] font-mono text-[#7C5CFF] font-semibold">SELECTED</span>
+            </div>
+
+            <!-- Cat Vibing Meme Graphic -->
+            <div class="flex-1 rounded-[4px] bg-[#1d222b] overflow-hidden relative border border-[#262B36] flex flex-col items-center justify-center">
+              <div class="w-full h-full bg-gradient-to-tr from-purple-900/50 via-indigo-800/30 to-amber-500/30 flex flex-col items-center justify-center p-2 text-center">
+                <span class="text-2xl animate-bounce">🐱🎶</span>
+                <span class="text-[9px] font-bold text-white mt-1">cat_vibing.gif</span>
+                <span class="text-[8px] text-[#00E5A0] font-mono">120 BPM Jam</span>
+              </div>
+            </div>
+
+            <!-- 8 Small Square Transform Handles (Corners and Sides) -->
+            <!-- Top-Left -->
+            <div class="absolute -top-1.5 -left-1.5 w-2.5 h-2.5 bg-white border border-[#7C5CFF] rounded-[1px] cursor-nwse-resize shadow-sm"></div>
+            <!-- Top-Center -->
+            <div class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white border border-[#7C5CFF] rounded-[1px] cursor-ns-resize shadow-sm"></div>
+            <!-- Top-Right -->
+            <div class="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 bg-white border border-[#7C5CFF] rounded-[1px] cursor-nesw-resize shadow-sm"></div>
+            <!-- Middle-Left -->
+            <div class="absolute top-1/2 -translate-y-1/2 -left-1.5 w-2.5 h-2.5 bg-white border border-[#7C5CFF] rounded-[1px] cursor-ew-resize shadow-sm"></div>
+            <!-- Middle-Right -->
+            <div class="absolute top-1/2 -translate-y-1/2 -right-1.5 w-2.5 h-2.5 bg-white border border-[#7C5CFF] rounded-[1px] cursor-ew-resize shadow-sm"></div>
+            <!-- Bottom-Left -->
+            <div class="absolute -bottom-1.5 -left-1.5 w-2.5 h-2.5 bg-white border border-[#7C5CFF] rounded-[1px] cursor-nesw-resize shadow-sm"></div>
+            <!-- Bottom-Center -->
+            <div class="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 bg-white border border-[#7C5CFF] rounded-[1px] cursor-ns-resize shadow-sm"></div>
+            <!-- Bottom-Right -->
+            <div class="absolute -bottom-1.5 -right-1.5 w-2.5 h-2.5 bg-white border border-[#7C5CFF] rounded-[1px] cursor-nwse-resize shadow-sm"></div>
+
+          </div>
+
+          <!-- Floating quick context pill for selected asset -->
+          <div class="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-[#0F1115] border border-[#262B36] rounded px-1.5 py-0.5 text-[9px] font-mono text-[#8B93A7] whitespace-nowrap shadow">
+            W: 240px · H: 180px · Rot: 0°
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Minimap in Bottom-Right Corner of Canvas -->
+      <div class="absolute bottom-4 right-4 w-44 h-28 bg-[#171A21]/90 backdrop-blur-md border border-[#262B36] rounded-[6px] p-2 flex flex-col shadow-xl z-20">
+        <div class="flex items-center justify-between text-[10px] text-[#8B93A7] mb-1 font-mono">
+          <span class="flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-[#7C5CFF]"></span>
+            <span>Viewport</span>
+          </span>
+          <span>75%</span>
+        </div>
+        <!-- Minimap canvas representation -->
+        <div class="flex-1 bg-[#0F1115] rounded border border-[#262B36] relative overflow-hidden flex items-center justify-center p-1">
+          <!-- Stage miniature -->
+          <div class="w-24 h-14 border border-[#00E5A0] bg-[#1a1e27] rounded-[2px] relative flex items-center justify-center">
+            <span class="text-[6px] text-white/50 font-bold font-mono">STAGE</span>
+          </div>
+          <!-- Offscreen miniature badges -->
+          <div class="absolute top-2 right-3 w-3 h-2.5 bg-amber-500/40 border border-amber-500/70 rounded-[1px]"></div>
+          <div class="absolute bottom-2 left-2 w-3.5 h-2.5 bg-yellow-500/40 border border-yellow-500/70 rounded-[1px]"></div>
+          <div class="absolute bottom-2 right-5 w-4 h-3 bg-[#7C5CFF]/60 border border-[#7C5CFF] rounded-[1px]"></div>
+          <!-- Viewport boundary box -->
+          <div class="absolute inset-1.5 border border-dashed border-[#7C5CFF]/70 rounded-[2px] pointer-events-none"></div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- 5. RIGHT SIDEBAR (300px wide) - Properties of Selected Image -->
+    <aside class="w-[300px] min-w-[300px] max-w-[300px] bg-[#171A21] border-l border-[#262B36] flex flex-col overflow-y-auto custom-scrollbar z-10">
+      
+      <!-- Panel Header with Lock & Visibility Icons -->
+      <div class="h-12 min-h-[48px] px-3.5 border-b border-[#262B36] flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-2 h-2 rounded-full bg-[#7C5CFF]"></div>
+          <span class="text-xs font-semibold text-[#E6E8EE] tracking-wide uppercase">Properties</span>
+        </div>
+        <!-- Lock & Visibility Icons -->
+        <div class="flex items-center gap-1">
+          <button title="Toggle Visibility" class="w-7 h-7 rounded-[4px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4 text-[#00E5A0]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+          <button title="Toggle Lock" class="w-7 h-7 rounded-[4px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </button>
+          <button title="More actions" class="w-7 h-7 rounded-[4px] text-[#8B93A7] hover:text-[#E6E8EE] hover:bg-[#262B36] flex items-center justify-center transition-colors">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="1.5"></circle>
+              <circle cx="6" cy="12" r="1.5"></circle>
+              <circle cx="18" cy="12" r="1.5"></circle>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="p-3.5 space-y-4 text-xs">
+
+        <!-- Selected Element Name (Editable) -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-[#8B93A7] text-[11px] font-medium">
+            <span>Asset Name</span>
+            <span class="text-[10px] text-[#7C5CFF] font-mono">Animated GIF</span>
+          </div>
+          <div class="relative">
+            <input type="text" value="cat_vibing.gif" class="w-full h-8 px-2.5 bg-[#0F1115] border border-[#262B36] focus:border-[#7C5CFF] rounded-[6px] text-xs font-medium text-[#E6E8EE] outline-none transition-colors">
+            <span class="absolute right-2 top-2 text-[#8B93A7]">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+              </svg>
+            </span>
+          </div>
+        </div>
+
+        <!-- Position X and Y -->
+        <div class="space-y-1.5">
+          <div class="text-[#8B93A7] text-[11px] font-medium">Position</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="flex items-center bg-[#0F1115] border border-[#262B36] focus-within:border-[#7C5CFF] rounded-[6px] px-2 h-8 transition-colors">
+              <span class="text-[#8B93A7] font-mono text-[11px] mr-1.5">X</span>
+              <input type="text" value="1420" class="w-full bg-transparent text-xs font-mono text-[#E6E8EE] outline-none">
+              <span class="text-[#8B93A7] text-[10px]">px</span>
+            </div>
+            <div class="flex items-center bg-[#0F1115] border border-[#262B36] focus-within:border-[#7C5CFF] rounded-[6px] px-2 h-8 transition-colors">
+              <span class="text-[#8B93A7] font-mono text-[11px] mr-1.5">Y</span>
+              <input type="text" value="780" class="w-full bg-transparent text-xs font-mono text-[#E6E8EE] outline-none">
+              <span class="text-[#8B93A7] text-[10px]">px</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Size W and H + Aspect Lock -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-[#8B93A7] text-[11px] font-medium">
+            <span>Dimensions</span>
+            <button title="Constrain Proportions" class="text-[#7C5CFF] hover:text-[#6f4ef8]">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="flex items-center bg-[#0F1115] border border-[#262B36] focus-within:border-[#7C5CFF] rounded-[6px] px-2 h-8 transition-colors">
+              <span class="text-[#8B93A7] font-mono text-[11px] mr-1.5">W</span>
+              <input type="text" value="240" class="w-full bg-transparent text-xs font-mono text-[#E6E8EE] outline-none">
+              <span class="text-[#8B93A7] text-[10px]">px</span>
+            </div>
+            <div class="flex items-center bg-[#0F1115] border border-[#262B36] focus-within:border-[#7C5CFF] rounded-[6px] px-2 h-8 transition-colors">
+              <span class="text-[#8B93A7] font-mono text-[11px] mr-1.5">H</span>
+              <input type="text" value="180" class="w-full bg-transparent text-xs font-mono text-[#E6E8EE] outline-none">
+              <span class="text-[#8B93A7] text-[10px]">px</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Rotation -->
+        <div class="space-y-1.5">
+          <div class="text-[#8B93A7] text-[11px] font-medium">Rotation</div>
+          <div class="flex items-center bg-[#0F1115] border border-[#262B36] focus-within:border-[#7C5CFF] rounded-[6px] px-2.5 h-8 transition-colors">
+            <svg class="w-3.5 h-3.5 text-[#8B93A7] mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6"></path>
+              <path d="M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+            </svg>
+            <input type="text" value="0" class="w-full bg-transparent text-xs font-mono text-[#E6E8EE] outline-none">
+            <span class="text-[#8B93A7] font-mono text-xs">°</span>
+          </div>
+        </div>
+
+        <div class="w-full h-[1px] bg-[#262B36]"></div>
+
+        <!-- Opacity Slider -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-[#8B93A7] text-[11px] font-medium">
+            <span>Opacity</span>
+            <span class="font-mono text-xs text-[#E6E8EE]">100%</span>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <input type="range" min="0" max="100" value="100" class="w-full h-1.5 bg-[#0F1115] rounded-lg appearance-none cursor-pointer accent-[#7C5CFF]">
+            <div class="w-12 h-7 bg-[#0F1115] border border-[#262B36] rounded-[6px] flex items-center justify-center font-mono text-[11px] text-[#E6E8EE]">
+              100%
+            </div>
+          </div>
+        </div>
+
+        <div class="w-full h-[1px] bg-[#262B36]"></div>
+
+        <!-- Layer Management -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-[#8B93A7] text-[11px] font-medium">
+            <span>Layer Order</span>
+            <span class="text-[10px] text-[#8B93A7]">Index: 4</span>
+          </div>
+          <div class="grid grid-cols-4 gap-1 bg-[#0F1115] p-1 rounded-[6px] border border-[#262B36]">
+            <!-- Bring to Front -->
+            <button title="Bring to Front" class="h-7 rounded hover:bg-[#262B36] text-[#8B93A7] hover:text-[#E6E8EE] flex items-center justify-center transition-colors">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+                <line x1="6" y1="5" x2="18" y2="5"></line>
+              </svg>
+            </button>
+            <!-- Bring Forward -->
+            <button title="Bring Forward" class="h-7 rounded hover:bg-[#262B36] text-[#8B93A7] hover:text-[#E6E8EE] flex items-center justify-center transition-colors">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="18 15 12 9 6 15"></polyline>
+              </svg>
+            </button>
+            <!-- Send Backward -->
+            <button title="Send Backward" class="h-7 rounded hover:bg-[#262B36] text-[#8B93A7] hover:text-[#E6E8EE] flex items-center justify-center transition-colors">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            <!-- Send to Back -->
+            <button title="Send to Back" class="h-7 rounded hover:bg-[#262B36] text-[#8B93A7] hover:text-[#E6E8EE] flex items-center justify-center transition-colors">
+              <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+                <line x1="6" y1="19" x2="18" y2="19"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="w-full h-[1px] bg-[#262B36]"></div>
+
+        <!-- Stream Behavior / Trigger -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-[#8B93A7] text-[11px] font-medium">
+            <span>Overlay Trigger</span>
+            <span class="text-[10px] text-[#00E5A0] font-mono">Ready</span>
+          </div>
+          <div class="bg-[#0F1115] border border-[#262B36] rounded-[6px] p-2 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] text-[#E6E8EE]">Show on Chat Command</span>
+              <div class="w-7 h-4 bg-[#7C5CFF] rounded-full relative cursor-pointer">
+                <div class="w-3 h-3 rounded-full bg-white absolute right-0.5 top-0.5 shadow-sm"></div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between text-[10px] text-[#8B93A7]">
+              <span>Command:</span>
+              <span class="font-mono text-[#7C5CFF] bg-[#262B36] px-1.5 py-0.5 rounded">!vibecat</span>
+            </div>
+            <div class="flex items-center justify-between text-[10px] text-[#8B93A7]">
+              <span>Auto-hide after:</span>
+              <span class="font-mono text-[#E6E8EE]">8 seconds</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="pt-2">
+          <button class="w-full h-8 rounded-[6px] bg-[#262B36] hover:bg-red-500/20 hover:text-red-400 hover:border-red-500/30 text-[#8B93A7] text-xs font-medium flex items-center justify-center gap-1.5 border border-[#343b49] transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Delete Selected Asset</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Bottom status in sidebar -->
+      <div class="mt-auto p-3 border-t border-[#262B36] bg-[#13151b] text-[10px] text-[#8B93A7] flex items-center justify-between font-mono">
+        <span>OBS Browser Source</span>
+        <span class="text-[#00E5A0]">Active Sync</span>
+      </div>
+    </aside>
+
+  </div>
+
+</body>
+</html>
