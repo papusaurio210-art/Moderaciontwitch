@@ -1,0 +1,42 @@
+{
+  "name": "stream-overlay-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "setup:local": "node scripts/setup-local.mjs",
+    "dev": "node scripts/vite.mjs --host 0.0.0.0 --port 8787 --strictPort",
+    "build": "tsc --noEmit && node scripts/vite.mjs build",
+    "preview": "node scripts/wrangler.mjs dev --ip 0.0.0.0 --port 8787 --local --persist-to .wrangler/state",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:e2e": "npm run build && playwright test",
+    "test:persistence": "npm run build && node scripts/check-persistence.mjs",
+    "check": "npm run typecheck && npm test && npm run test:e2e",
+    "deploy": "npm run build && node scripts/wrangler.mjs deploy"
+  },
+  "dependencies": {
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "lucide-react": "1.57.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "1.64.0",
+    "@cloudflare/workers-types": "5.20261016.1",
+    "@playwright/test": "1.64.1",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.5",
+    "wrangler": "4.151.0"
+  }
+}
