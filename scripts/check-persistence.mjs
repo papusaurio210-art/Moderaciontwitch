@@ -98,7 +98,9 @@ try {
     await socket(page, room, { t: 'timer.control', id: added.op.item.id, action: 'start' });
     if (kind === 'countdown') await socket(page, room, { t: 'timer.control', id: added.op.item.id, action: 'pause' });
   }
-  const before = await socket(page, room); assert.equal(before.rev, 23);
+  const grouped = await socket(page, room);
+  await socket(page, room, { t: 'items.move', ids: grouped.items.filter(i => i.type === 'shape').map(i => i.id), dx: 25, dy: -10 });
+  const before = await socket(page, room); assert.equal(before.rev, 24);
   assert.equal(before.items.filter(item => item.type === 'shape').length, 4);
   assert.equal(before.items.find(item => item.type === 'video').playing, false);
   assert.equal(before.items.find(item => item.type === 'video').volume, .35);
@@ -126,7 +128,7 @@ try {
     const body = await (await fetch(origin + path)).text();
     assert.ok(!body.includes(admin) && !body.includes('export interface Env'), 'Los archivos privados no deben servirse.');
   }
-  console.log('OK: medios, texto, figuras, cuenta pausada y cronómetro activo recuperados tras reiniciar; reloj, cabeceras y archivos privados verificados.');
+  console.log('OK: medios, texto, figuras movidas en grupo, cuenta pausada y cronómetro activo recuperados tras reiniciar; reloj, cabeceras y archivos privados verificados.');
 } finally {
   await browser?.close(); await stop(); await rm(statePath, { recursive: true, force: true });
 }

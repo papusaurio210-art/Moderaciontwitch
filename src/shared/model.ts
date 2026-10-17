@@ -47,6 +47,10 @@ export interface RoomState {
 }
 export type Role = 'editor' | 'viewer';
 export type EditCommand =
+  | { t: 'items.move'; ids: string[]; dx: number; dy: number }
+  | { t: 'items.align'; ids: string[]; alignment: import('./editing').Alignment; target: 'selection' | 'stage' }
+  | { t: 'items.duplicate' | 'items.remove'; ids: string[] }
+  | { t: 'history.undo' | 'history.redo' }
   | { t: 'item.add'; mediaId: string; x: number; y: number }
   | { t: 'text.add'; x: number; y: number }
   | { t: 'shape.add'; shape: ShapeKind; x: number; y: number }
@@ -58,19 +62,28 @@ export type EditCommand =
   | { t: 'item.remove'; id: string }
   | { t: 'item.reorder'; ids: string[] };
 export type Operation =
+  | { t: 'items.change'; upserts: Item[]; removed: string[]; order?: string[] }
   | { t: 'item.upsert'; item: Item }
   | { t: 'item.remove'; id: string }
   | { t: 'item.reorder'; ids: string[] }
   | { t: 'media.add'; media: MediaFile };
 export type ServerMessage =
+  | { t: 'history'; undo: number; redo: number }
   | { t: 'welcome' | 'state'; role: Role; state: RoomState; serverNow: number }
   | { t: 'op'; rev: number; op: Operation; requestId?: string }
+  | { t: 'previews'; patches: { id: string; patch: ItemPatch }[] }
   | { t: 'preview'; id: string; patch: ItemPatch }
   | { t: 'presence'; editors: number; viewers: number }
   | { t: 'error'; code: string; message: string; requestId?: string };
 
 export function applyOperation(state: RoomState, op: Operation, rev: number): RoomState {
   switch (op.t) {
+    case 'items.change': {
+      const updates = new Map(op.upserts.map(i => [i.id, i]));
+      const items = state.items.filter(i => !op.removed.includes(i.id)).map(i => updates.get(i.id) ?? i);
+      items.push(...op.upserts.filter(i => !state.items.some(old => old.id === i.id)));
+      return { ...state, rev, items: op.order ? op.order.map(id => items.find(i => i.id === id)!).filter(Boolean) : items };
+    }
     case 'item.upsert': return { ...state, rev, items: state.items.some(i => i.id === op.item.id)
       ? state.items.map(i => i.id === op.item.id ? op.item : i) : [...state.items, op.item] };
     case 'item.remove': return { ...state, rev, items: state.items.filter(i => i.id !== op.id) };

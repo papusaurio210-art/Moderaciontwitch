@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Grid2X2, Hand,
   Image as ImageIcon, ImagePlus, Keyboard, Layers, Link, LoaderCircle, LockKeyhole, Maximize, Minus,
-  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer } from 'lucide-react';
+  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer, Undo2, Redo2 } from 'lucide-react';
 import { clamp, shapeDefaults, type ItemPatch, type ShapeKind, type TimerKind } from '../shared/model';
 import { viewerKeyFromEditor } from '../shared/keys';
 import { Brand, ConnectionBadge, ViewerCount, MediaThumbnail, ItemIcon } from './components';
@@ -9,6 +9,7 @@ import { Canvas, type View } from './Canvas';
 import type { RoomConnection } from './useRoom';
 import { NumberField, NameField, TextProperties, VideoProperties, ShapeProperties } from './Properties';
 import { TimerProperties } from './TimerProperties';
+import { SelectionTools } from './SelectionTools';
 import { inspectFile } from './media';
 
 function Tool({ label, active, onClick, children, disabled }: { label: string; active?: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
@@ -17,7 +18,11 @@ function Tool({ label, active, onClick, children, disabled }: { label: string; a
 
 export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: string }) {
   const state = room.state!;
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selection, setSelection] = useState<string[]>([]);
+  const selectedIds = selection.filter(id => state.items.some(i => i.id === id));
+  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
+  const selectedItems = room.rendered.filter(i => selectedIds.includes(i.id));
+  const select = (id: string, toggle = false) => setSelection(current => toggle ? current.includes(id) ? current.filter(i => i !== id) : [...current, id] : [id]);
   const [tab, setTab] = useState<'library' | 'layers'>('library');
   const [search, setSearch] = useState('');
   const [grid, setGrid] = useState(true);
@@ -37,26 +42,35 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   const editUrl = `${location.origin}/panel/${state.roomId}#key=${editorKey}`;
 
   useEffect(() => { void viewerKeyFromEditor(editorKey).then(setViewerKey); }, [editorKey]);
-  useEffect(() => { if (room.lastAddedId) setSelectedId(room.lastAddedId); }, [room.lastAddedId]);
+  useEffect(() => { if (room.lastAddedIds.length) setSelection(room.lastAddedIds); }, [room.lastAddedIds]);
   useEffect(() => { document.title = `${state.name} · Overlay Studio`; }, [state.name]);
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 3200); return () => clearTimeout(timer); }, [notice]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
       if (/INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName) || help || links) return;
       if ((event.ctrlKey || event.metaKey) && event.key === '0') { event.preventDefault(); setFitSignal(n => n + 1); }
-      if (event.key === 'Escape') setSelectedId(null);
-      if (!selected || !enabled) return;
-      if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); room.send({ t: 'item.remove', id: selected.id }); }
-      if (!selected.locked && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      if (event.key === 'Escape') setSelection([]);
+      if (!enabled) return;
+      const modifier = event.ctrlKey || event.metaKey, key = event.key.toLowerCase();
+      if (modifier && key === 'a') { event.preventDefault(); setSelection(state.items.map(i => i.id)); return; }
+      if (modifier && (key === 'z' || key === 'y')) {
+        event.preventDefault(); const redo = key === 'y' || event.shiftKey;
+        if (!room.pending && room.history[redo ? 'redo' : 'undo']) room.send({ t: redo ? 'history.redo' : 'history.undo' });
+        return;
+      }
+      if (!selectedIds.length || room.pending) return;
+      if (modifier && key === 'd') { event.preventDefault(); room.send({ t: 'items.duplicate', ids: selectedIds }); return; }
+      if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); room.send({ t: 'items.remove', ids: selectedIds }); }
+      if (!selectedItems.some(i => i.locked) && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
         event.preventDefault(); const d = event.shiftKey ? 10 : 1;
-        room.send({ t: 'item.patch', id: selected.id, patch: {
-          x: clamp(selected.x + (event.key === 'ArrowRight' ? d : event.key === 'ArrowLeft' ? -d : 0), -100000, 100000),
-          y: clamp(selected.y + (event.key === 'ArrowDown' ? d : event.key === 'ArrowUp' ? -d : 0), -100000, 100000),
-        } });
+        room.send({ t: 'items.move', ids: selectedIds,
+          dx: event.key === 'ArrowRight' ? d : event.key === 'ArrowLeft' ? -d : 0,
+          dy: event.key === 'ArrowDown' ? d : event.key === 'ArrowUp' ? -d : 0,
+        });
       }
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
-  }, [selected, enabled, room.send, help, links]);
+  }, [selection, state.items, enabled, room.send, room.pending, room.history, help, links]);
 
   async function upload(files: FileList | File[], at?: { x: number; y: number }) {
     if (!enabled || uploading) return;
@@ -143,20 +157,20 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
             <button className="secondary-button upload-button" onClick={() => fileInput.current?.click()} disabled={!enabled || uploading}>{uploading ? <LoaderCircle size={15} className="spin" /> : <Upload size={15} />}{uploading ? 'Subiendo archivo…' : 'Subir archivos'}</button>
             <span className="upload-formats">IMÁGENES / GIF: 25 MB · VÍDEO: 50 MB</span></div>
         </> : <><div className="library-subtitle"><span>ORDEN DEL ESCENARIO</span><span>{state.items.length} elementos</span></div><div className="layers-list">
-          {[...state.items].reverse().map(item => <div className={`layer-row ${item.id === selectedId ? 'selected' : ''}`} key={item.id}>
-            <button className="layer-select" onClick={() => setSelectedId(item.id)}><ItemIcon item={item} size={15} /><span>{item.name}</span></button>
+          {[...state.items].reverse().map(item => <div className={`layer-row ${selectedIds.includes(item.id) ? 'selected' : ''}`} key={item.id}>
+            <button className="layer-select" onClick={e => select(item.id, e.shiftKey || e.ctrlKey || e.metaKey)}><ItemIcon item={item} size={15} /><span>{item.name}</span></button>
             <button aria-label={`${item.visible ? 'Ocultar' : 'Mostrar'} ${item.name}`} disabled={!enabled} onClick={() => room.send({ t: 'item.patch', id: item.id, patch: { visible: !item.visible } })}>{item.visible ? <Eye size={13} /> : <EyeOff size={13} />}</button>
             <button aria-label={`${item.locked ? 'Desbloquear' : 'Bloquear'} ${item.name}`} disabled={!enabled} onClick={() => room.send({ t: 'item.patch', id: item.id, patch: { locked: !item.locked } })}>{item.locked ? <LockKeyhole size={13} /> : <UnlockKeyhole size={13} />}</button>
           </div>)}
           {!state.items.length && <div className="empty-library"><Layers size={25} /><strong>Todo en su sitio</strong><p>Los elementos que añadas aparecerán en esta lista.</p></div>}
-        </div><p className="layers-help">Las capas superiores se dibujan al frente.</p></>}
+        </div><p className="layers-help">Shift + clic para seleccionar varias. Las capas superiores se dibujan al frente.</p></>}
       </aside>
       <main className="workspace"><div className="canvas-toolbar"><div className="workspace-label"><Layers size={14} /><span>Escenario principal</span></div>
-        <div className="canvas-controls"><Tool label="Mostrar cuadrícula" active={grid} onClick={() => setGrid(g => !g)}><Grid2X2 size={15} /></Tool><span className="toolbar-divider" />
+        <div className="canvas-controls"><Tool label="Deshacer" onClick={() => room.send({ t: 'history.undo' })} disabled={!enabled || !!room.pending || !room.history.undo}><Undo2 size={15} /></Tool><Tool label="Rehacer" onClick={() => room.send({ t: 'history.redo' })} disabled={!enabled || !!room.pending || !room.history.redo}><Redo2 size={15} /></Tool><span className="toolbar-divider" /><Tool label="Mostrar cuadrícula" active={grid} onClick={() => setGrid(g => !g)}><Grid2X2 size={15} /></Tool><span className="toolbar-divider" />
           <Tool label="Alejar" onClick={() => zoomBy(1 / 1.2)}><Minus size={14} /></Tool><span className="zoom-value">{Math.round(view.zoom * 100)}%</span><Tool label="Acercar" onClick={() => zoomBy(1.2)}><Plus size={14} /></Tool>
           <button className="fit-button" title="Ajustar al escenario (Ctrl+0)" onClick={() => setFitSignal(n => n + 1)}><Maximize size={13} /><span>Ajustar</span></button></div>
       </div>
-        <Canvas room={room} selectedId={selectedId} select={setSelectedId} view={view} setView={setView} grid={grid} hand={hand} fitSignal={fitSignal} upload={(files, at) => void upload(files, at)} chooseFile={() => fileInput.current?.click()} />
+        <Canvas room={room} selectedIds={selectedIds} setSelection={setSelection} view={view} setView={setView} grid={grid} hand={hand} fitSignal={fitSignal} upload={(files, at) => void upload(files, at)} chooseFile={() => fileInput.current?.click()} />
         <footer className="canvas-footer"><span className={`save-state ${room.pending || room.status !== 'connected' ? 'pending' : ''}`}>{room.pending ? <LoaderCircle className="spin" size={13} /> : <CheckCheck size={14} />}
           {room.status !== 'connected' ? 'Esperando conexión' : room.pending ? 'Guardando cambios…' : room.isPreviewing ? 'Editando en vivo…' : 'Cambios guardados'}</span>
           <span>{state.items.length} {state.items.length === 1 ? 'elemento' : 'elementos'}<i />{state.stage.w} × {state.stage.h}<span className="footer-transparent"><i />Fondo transparente</span></span></footer>
@@ -165,6 +179,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
         {selected ? <fieldset className="properties-content" disabled={!enabled}>
           <div className="selected-type"><span><ItemIcon item={selected} />{selected.type === 'shape' ? shapeDefaults[selected.shape].name : selected.type === 'timer' ? selected.kind === 'countdown' ? 'Cuenta regresiva' : 'Cronómetro' : { image: 'Imagen', gif: 'GIF animado', video: 'Vídeo', text: 'Texto' }[selected.type]}</span><div><Tool label={selected.visible ? 'Ocultar elemento' : 'Mostrar elemento'} onClick={() => save({ visible: !selected.visible })}>{selected.visible ? <Eye size={15} /> : <EyeOff size={15} />}</Tool>
             <Tool label={selected.locked ? 'Desbloquear elemento' : 'Bloquear elemento'} active={selected.locked} onClick={() => save({ locked: !selected.locked })}>{selected.locked ? <LockKeyhole size={14} /> : <UnlockKeyhole size={14} />}</Tool></div></div>
+          <SelectionTools items={selectedItems} room={room} />
           <NameField key={`name:${selected.id}`} item={selected} save={save} />
           {selected.type === 'shape' && <ShapeProperties key={`shape:${selected.id}`} item={selected} save={save} />}
           {selected.type === 'timer' && <TimerProperties key={`timer:${selected.id}`} item={selected} send={room.send} serverOffset={room.serverOffset} />}
@@ -181,6 +196,11 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
           <section className="property-section"><h3>Orden de capa<span>{state.items.findIndex(i => i.id === selected.id) + 1} / {state.items.length}</span></h3><div className="layer-order"><button className="secondary-button" onClick={() => reorder(1)} disabled={state.items.at(-1)?.id === selected.id}><ArrowUp size={14} />Adelante</button><button className="secondary-button" onClick={() => reorder(-1)} disabled={state.items[0]?.id === selected.id}><ArrowDown size={14} />Atrás</button></div></section>
           {media && <section className="source-info"><span>ARCHIVO ORIGINAL</span><strong title={media.name}>{media.name}</strong><small>{media.width} × {media.height} · {(media.size / 1024).toFixed(0)} KB</small></section>}
           <button className="delete-button" onClick={() => room.send({ t: 'item.remove', id: selected.id })}><Trash2 size={14} />Eliminar del escenario</button>
+        </fieldset> : selectedItems.length > 1 ? <fieldset className="properties-content" disabled={!enabled}>
+          <div className="selected-type"><span>{selectedItems.length} elementos seleccionados</span></div>
+          <SelectionTools items={selectedItems} room={room} />
+          <p className="property-note">Arrastra cualquiera de los elementos seleccionados para mover el grupo. Shift + clic agrega o quita elementos.</p>
+          <button className="delete-button" disabled={!!room.pending} onClick={() => room.send({ t: 'items.remove', ids: selectedIds })}><Trash2 size={14} />Eliminar selección</button>
         </fieldset> : <div className="empty-properties"><span className="property-illustration"><MousePointer2 size={29} strokeWidth={1.2} /></span><h3>Cada detalle cuenta</h3><p>Selecciona un elemento para ajustar su posición, tamaño y apariencia.</p><div className="property-tips"><span><MousePointer2 size={14} />Clic para seleccionar</span><span><Maximize size={14} />Arrastra para transformar</span><span><Layers size={14} />Organiza desde Capas</span></div></div>}
         <div className="properties-footer"><PanelRight size={13} /><span>Lo que diseñas, en tu directo.</span></div>
       </aside>
@@ -189,7 +209,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
     {room.error && <div className="toast error-toast" role="alert"><span>{room.error}</span><button aria-label="Cerrar aviso" onClick={() => room.setError('')}><X size={15} /></button></div>}
     {notice && <div className="toast" role="status"><Check size={16} /><span>{notice}</span></div>}
     {help && <div className="modal-backdrop" onMouseDown={() => setHelp(false)}><section className="modal" role="dialog" aria-modal="true" aria-label="Atajos de teclado" onMouseDown={e => e.stopPropagation()}><button className="modal-close" aria-label="Cerrar" onClick={() => setHelp(false)}><X size={18} /></button><Keyboard className="modal-icon" /><h2>Un poco más de control</h2><p>Pequeños atajos para grandes directos.</p>
-      <dl className="shortcuts"><dt>Mover el lienzo</dt><dd>Espacio + arrastrar</dd><dt>Acercar o alejar</dt><dd>Rueda del ratón</dd><dt>Ajustar escenario</dt><dd>Ctrl / ⌘ + 0</dd><dt>Mover elemento</dt><dd>Flechas · Shift: 10 px</dd><dt>Eliminar elemento</dt><dd>Supr / Retroceso</dd><dt>Redimensionar libremente</dt><dd>Shift + manija</dd><dt>Rotar en pasos de 15°</dt><dd>Shift + rotación</dd><dt>Quitar selección</dt><dd>Esc</dd></dl></section></div>}
+      <dl className="shortcuts"><dt>Mover el lienzo</dt><dd>Espacio + arrastrar</dd><dt>Acercar o alejar</dt><dd>Rueda del ratón</dd><dt>Ajustar escenario</dt><dd>Ctrl / ⌘ + 0</dd><dt>Selección múltiple</dt><dd>Shift + clic · arrastrar un recuadro</dd><dt>Seleccionar todo</dt><dd>Ctrl / ⌘ + A</dd><dt>Duplicar selección</dt><dd>Ctrl / ⌘ + D</dd><dt>Deshacer / rehacer</dt><dd>Ctrl / ⌘ + Z · Shift + Z</dd><dt>Mover selección</dt><dd>Flechas · Shift: 10 px</dd><dt>Eliminar elemento</dt><dd>Supr / Retroceso</dd><dt>Redimensionar libremente</dt><dd>Shift + manija</dd><dt>Rotar en pasos de 15°</dt><dd>Shift + rotación</dd><dt>Quitar selección</dt><dd>Esc</dd></dl></section></div>}
     {links && <div className="modal-backdrop" onMouseDown={() => setLinks(false)}><section className="modal links-modal" role="dialog" aria-modal="true" aria-label="Enlaces del estudio" onMouseDown={e => e.stopPropagation()}><button className="modal-close" aria-label="Cerrar" onClick={() => setLinks(false)}><X size={18} /></button><Link className="modal-icon" /><h2>Conecta tu estudio</h2><p>Guarda estos enlaces para volver a tu sala.</p>
       <label>Overlay para OBS<span className="link-description">Añade una fuente de navegador de 1920 × 1080.</span><input readOnly value={overlayUrl} onFocus={e => e.currentTarget.select()} /></label><button className="secondary-button" onClick={() => void copy(overlayUrl, 'Enlace del overlay copiado')}><Copy size={14} />Copiar enlace de visualización</button>
       <label>Panel de edición<span className="link-description">Comparte este enlace solo con quienes puedan editar.</span><input readOnly value={editUrl} onFocus={e => e.currentTarget.select()} /></label><button className="secondary-button" onClick={() => void copy(editUrl, 'Enlace del panel copiado')}><Copy size={14} />Copiar enlace de edición</button>

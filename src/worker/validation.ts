@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { shapeKinds } from '../shared/model';
+import { alignments } from '../shared/editing';
 import { MAX_TIMER_DURATION } from '../shared/timers';
 
 const coordinate = z.number().finite().min(-100_000).max(100_000);
@@ -22,8 +23,16 @@ export const itemPatch = z.object({ ...geometry,
   volume: z.number().finite().min(0).max(1),
   fill: color.nullable(), borderColor: color, borderWidth: z.number().finite().min(0).max(64),
 }).partial().strict().refine(p => Object.keys(p).length > 0);
+const ids = z.array(id).min(1).max(500).refine(ids => new Set(ids).size === ids.length);
 const requestId = z.string().max(80).optional();
 export const clientMessage = z.discriminatedUnion('t', [
+  z.object({ t: z.literal('items.preview'), ids, dx: coordinate, dy: coordinate }).strict(),
+  z.object({ t: z.literal('items.move'), ids, dx: coordinate, dy: coordinate, requestId }).strict(),
+  z.object({ t: z.literal('items.align'), ids, alignment: z.enum(alignments), target: z.enum(['selection', 'stage']), requestId }).strict(),
+  z.object({ t: z.literal('items.duplicate'), ids, requestId }).strict(),
+  z.object({ t: z.literal('items.remove'), ids, requestId }).strict(),
+  z.object({ t: z.literal('history.undo'), requestId }).strict(),
+  z.object({ t: z.literal('history.redo'), requestId }).strict(),
   z.object({ t: z.literal('hello'), key: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
   z.object({ t: z.literal('sync') }).strict(),
   z.object({ t: z.literal('item.add'), mediaId: id, x: coordinate, y: coordinate, requestId }).strict(),

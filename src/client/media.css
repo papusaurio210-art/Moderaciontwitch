@@ -36,3 +36,12 @@
 .timer-duration-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .timer-duration-fields label{font-size:10px;color:#aab6ca}
 .timer-duration-fields input{width:100%;padding:8px 4px;margin-top:5px;font-size:11px}
+
+.selection-tools .alignment-buttons{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:12px 0}
+.alignment-buttons .icon-button{width:100%;background:#232733;border:1px solid #343948;border-radius:5px}
+.selection-tools>.secondary-button{width:100%}
+.selection-tools select{width:100%;font-size:11px;padding:8px;background:#12151d;color:inherit;border:1px solid #303645;border-radius:6px}
+.selection-marquee{position:absolute;pointer-events:none;border:1px solid #b59bff;background:#9370ff22}
+.group-border{position:absolute;pointer-events:none;border:1px dashed #b59bff}
+.canvas-item.locked{pointer-events:auto;cursor:default}
+.panning .canvas-item.locked{pointer-events:none}

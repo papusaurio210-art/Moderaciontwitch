@@ -2,12 +2,14 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './index';
 import type { Item, MediaFile, Operation, Role, RoomState, ServerMessage, VideoItem } from '../shared/model';
 import { applyOperation, defaultTextStyle, shapeDefaults, videoPosition } from '../shared/model';
+import { alignItems, selectionBounds, moveItems, historyEntry, historyOperation, trimHistory, type EditHistory } from '../shared/editing';
+import { timerElapsed } from '../shared/timers';
 import { controlTimer } from '../shared/timers';
 import { sha256 } from '../shared/keys';
 import { bearer, HttpError, json, smallJson } from './http';
 import { clientMessage, mediaMime, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_ROOM_BYTES } from './validation';
 
-interface Attachment { role: Role | null; deadline: number; windowStart: number; messages: number }
+interface Attachment { session: string; role: Role | null; deadline: number; windowStart: number; messages: number }
 
 export class Room extends DurableObject<Env> {
   private state: RoomState | null = null;
@@ -18,6 +20,8 @@ export class Room extends DurableObject<Env> {
     super(ctx, env);
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS room (id INTEGER PRIMARY KEY CHECK(id=1), state TEXT NOT NULL, editor_hash TEXT NOT NULL, viewer_hash TEXT NOT NULL)');
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY, bytes INTEGER NOT NULL, created_at INTEGER NOT NULL)');
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS edit_history (session TEXT PRIMARY KEY, history TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+    ctx.storage.sql.exec('DELETE FROM edit_history WHERE updated_at < ?', Date.now() - 86400000);
     const row = ctx.storage.sql.exec<{ state: string; editor_hash: string; viewer_hash: string }>('SELECT state, editor_hash, viewer_hash FROM room WHERE id=1').toArray()[0];
     if (row) { this.state = JSON.parse(row.state); this.editorHash = row.editor_hash; this.viewerHash = row.viewer_hash; }
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
@@ -41,7 +45,7 @@ export class Room extends DurableObject<Env> {
         if (this.ctx.getWebSockets().length >= 50) throw new HttpError(429, 'La sala tiene demasiadas conexiones.');
         this.ctx.acceptWebSocket(server);
         const deadline = Date.now() + 5000;
-        server.serializeAttachment({ role: null, deadline, windowStart: Date.now(), messages: 0 } satisfies Attachment);
+        server.serializeAttachment({ session: crypto.randomUUID(), role: null, deadline, windowStart: Date.now(), messages: 0 } satisfies Attachment);
         const scheduled = await this.ctx.storage.getAlarm();
         if (scheduled === null || scheduled > deadline) await this.ctx.storage.setAlarm(deadline);
         return new Response(null, { status: 101, webSocket: client });
@@ -67,16 +71,35 @@ export class Room extends DurableObject<Env> {
     const roles = this.ctx.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN).map(ws => (ws.deserializeAttachment() as Attachment)?.role);
     this.broadcast({ t: 'presence', editors: roles.filter(r => r === 'editor').length, viewers: roles.filter(r => r === 'viewer').length });
   }
-  private commit(op: Operation, requestId?: string) {
+  private history(ws: WebSocket): EditHistory {
+    const session = (ws.deserializeAttachment() as Attachment).session;
+    const row = this.ctx.storage.sql.exec<{ history: string }>('SELECT history FROM edit_history WHERE session=?', session).toArray()[0];
+    return row ? JSON.parse(row.history) : { undo: [], redo: [] };
+  }
+  private saveHistory(ws: WebSocket, history: EditHistory) {
+    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO edit_history VALUES (?, ?, ?)',
+      (ws.deserializeAttachment() as Attachment).session, JSON.stringify(trimHistory(history)), Date.now());
+  }
+  private historyStatus(ws: WebSocket) {
+    const history = this.history(ws);
+    this.send(ws, { t: 'history', undo: history.undo.length, redo: history.redo.length });
+  }
+  private commit(op: Operation, requestId?: string, ws?: WebSocket, restoredHistory?: EditHistory) {
     const next = applyOperation(this.state!, op, this.state!.rev + 1);
-    // All acknowledged changes are durable before the broadcast. Previews are
-    // explicitly transient and do not advance the authoritative revision.
-    this.ctx.storage.sql.exec('UPDATE room SET state=? WHERE id=1', JSON.stringify(next));
+    const entry = ws && !restoredHistory ? historyEntry(this.state!.items, next.items) : null;
+    // State and undo history are durable together, including DO hibernation.
+    this.ctx.storage.transactionSync(() => {
+      this.ctx.storage.sql.exec('UPDATE room SET state=? WHERE id=1', JSON.stringify(next));
+      if (ws && restoredHistory) this.saveHistory(ws, restoredHistory);
+      else if (ws && entry) { const history = this.history(ws); history.undo.push(entry); history.redo = []; this.saveHistory(ws, history); }
+    });
     this.state = next;
     this.broadcast({ t: 'op', rev: next.rev, op, requestId });
+    if (ws) this.historyStatus(ws);
   }
   private snapshot(ws: WebSocket, role: Role, t: 'welcome' | 'state') {
     this.send(ws, { t, state: this.state!, role, serverNow: Date.now() });
+    if (role === 'editor') this.historyStatus(ws);
   }
   async alarm() {
     for (const ws of this.ctx.getWebSockets()) {
@@ -96,6 +119,7 @@ export class Room extends DurableObject<Env> {
     try {
       if (typeof data !== 'string' || new TextEncoder().encode(data).byteLength > 65536) { ws.close(1009, 'Mensaje demasiado grande'); return; }
       const a = ws.deserializeAttachment() as Attachment;
+      a.session ??= crypto.randomUUID();
       if (Date.now() - a.windowStart >= 1000) { a.windowStart = Date.now(); a.messages = 0; }
       if (++a.messages > 200) { ws.close(1008, 'Demasiados mensajes'); return; }
       ws.serializeAttachment(a);
@@ -118,18 +142,51 @@ export class Room extends DurableObject<Env> {
       if (msg.t === 'sync') { this.snapshot(ws, a.role, 'state'); return; }
       if (a.role !== 'editor') throw new HttpError(403, 'Este enlace solo permite visualizar.');
       const state = this.state!;
-      if (msg.t === 'text.add') {
+      const commit = (op: Operation, requestId?: string) => this.commit(op, requestId, ws);
+      if (msg.t === 'history.undo' || msg.t === 'history.redo') {
+        const history = this.history(ws), direction = msg.t === 'history.undo' ? 'undo' : 'redo';
+        const entry = history[direction].at(-1);
+        if (!entry) throw new HttpError(409, 'No hay cambios para deshacer o rehacer en esta sesión.');
+        const op = historyOperation(state, entry, direction);
+        if (!op) {
+          this.saveHistory(ws, { undo: [], redo: [] }); this.historyStatus(ws);
+          throw new HttpError(409, 'Otro editor modificó estos elementos o su orden. El historial se reinició para conservar sus cambios.');
+        }
+        history[direction].pop(); history[direction === 'undo' ? 'redo' : 'undo'].push(entry);
+        this.commit(op, msg.requestId, ws, history);
+      } else if (msg.t === 'items.preview' || msg.t === 'items.move' || msg.t === 'items.align' || msg.t === 'items.duplicate' || msg.t === 'items.remove') {
+        const items = state.items.filter(i => msg.ids.includes(i.id));
+        if (items.length !== msg.ids.length) throw new HttpError(409, 'Algún elemento ya no existe. Vuelve a seleccionarlos.');
+        if ((msg.t === 'items.preview' || msg.t === 'items.move' || msg.t === 'items.align') && items.some(i => i.locked)) throw new HttpError(409, 'Desbloquea todos los elementos seleccionados antes de moverlos.');
+        let upserts: Item[] = [], removed: string[] = [];
+        if (msg.t === 'items.remove') removed = msg.ids;
+        if (msg.t === 'items.preview') {
+          this.broadcast({ t: 'previews', patches: moveItems(items, msg.dx, msg.dy).map(i => ({ id: i.id, patch: { x: i.x, y: i.y } })) }, ws); return;
+        }
+        if (msg.t === 'items.move') upserts = moveItems(items, msg.dx, msg.dy);
+        if (msg.t === 'items.align') upserts = alignItems(items, msg.alignment, msg.target === 'stage' || items.length === 1 ? state.stage : selectionBounds(items));
+        if (msg.t === 'items.duplicate') {
+          if (state.items.length + items.length > 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
+          const now = Date.now();
+          upserts = moveItems(items, 24, 24).map(item => ({ ...item, id: crypto.randomUUID(), name: `${item.name.slice(0, 112)} (copia)`,
+            ...(item.type === 'video' ? { playing: false, startedAt: null, position: videoPosition(item, now, state.media.find(m => m.id === item.mediaId)?.duration ?? 0) } : {}),
+            ...(item.type === 'timer' ? { running: false, startedAt: null, elapsedMs: timerElapsed(item, now) } : {}),
+          }));
+        }
+        if (upserts.some(i => Math.abs(i.x) > 100000 || Math.abs(i.y) > 100000)) throw new HttpError(400, 'La alineación supera el límite del lienzo.');
+        commit({ t: 'items.change', upserts, removed }, msg.requestId);
+      } else if (msg.t === 'text.add') {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
-        this.commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'text', name: 'Texto',
+        commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'text', name: 'Texto',
           text: 'Tu texto aquí', x: msg.x, y: msg.y, w: 720, h: 180, rot: 0,
           opacity: 1, visible: true, locked: false, ...defaultTextStyle } }, msg.requestId);
       } else if (msg.t === 'shape.add') {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
-        this.commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'shape', shape: msg.shape,
+        commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'shape', shape: msg.shape,
           x: msg.x, y: msg.y, rot: 0, opacity: 1, visible: true, locked: false, ...shapeDefaults[msg.shape] } }, msg.requestId);
       } else if (msg.t === 'timer.add') {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
-        this.commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'timer', kind: msg.kind,
+        commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'timer', kind: msg.kind,
           name: msg.kind === 'countdown' ? 'Cuenta regresiva' : 'Cronómetro', x: msg.x, y: msg.y, w: 640, h: 140, rot: 0,
           opacity: 1, visible: true, locked: false, ...defaultTextStyle, fontFamily: 'JetBrains Mono', fontSize: 96, align: 'center',
           durationMs: msg.kind === 'countdown' ? 300000 : 0, elapsedMs: 0, running: false, startedAt: null } }, msg.requestId);
@@ -137,7 +194,7 @@ export class Room extends DurableObject<Env> {
         const item = state.items.find(i => i.id === msg.id);
         if (!item || item.type !== 'timer') throw new HttpError(400, 'Selecciona un temporizador.');
         if (msg.t === 'timer.set' && item.kind !== 'countdown') throw new HttpError(400, 'La duración solo se configura en una cuenta regresiva.');
-        this.commit({ t: 'item.upsert', item: msg.t === 'timer.control' ? controlTimer(item, msg.action, Date.now())
+        commit({ t: 'item.upsert', item: msg.t === 'timer.control' ? controlTimer(item, msg.action, Date.now())
           : { ...item, durationMs: msg.durationMs, elapsedMs: 0, running: false, startedAt: null } }, msg.requestId);
       } else if (msg.t === 'item.add') {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
@@ -150,7 +207,7 @@ export class Room extends DurableObject<Env> {
         const item: Item = media.mime.startsWith('video/')
           ? { ...base, type: 'video', loop: true, muted: true, volume: 1, playing: true, position: 0, startedAt: Date.now() }
           : { ...base, type: media.mime === 'image/gif' ? 'gif' : 'image' };
-        this.commit({ t: 'item.upsert', item }, msg.requestId);
+        commit({ t: 'item.upsert', item }, msg.requestId);
       } else if (msg.t === 'video.control') {
         const item = state.items.find(i => i.id === msg.id);
         if (!item || item.type !== 'video') throw new HttpError(400, 'Selecciona un vídeo para controlar su reproducción.');
@@ -158,15 +215,15 @@ export class Room extends DurableObject<Env> {
         const position = msg.action === 'restart' ? 0 : videoPosition(item, now, duration);
         const next: VideoItem = { ...item, position: msg.action === 'play' && duration > 0 && position >= duration ? 0 : position,
           playing: msg.action !== 'pause', startedAt: msg.action === 'pause' ? null : now };
-        this.commit({ t: 'item.upsert', item: next }, msg.requestId);
+        commit({ t: 'item.upsert', item: next }, msg.requestId);
       } else if (msg.t === 'item.reorder') {
         if (msg.ids.length !== state.items.length || new Set(msg.ids).size !== state.items.length
           || msg.ids.some(id => !state.items.some(i => i.id === id))) throw new HttpError(400, 'El orden de capas no es válido.');
-        this.commit(msg, msg.requestId);
+        commit(msg, msg.requestId);
       } else {
         const item = state.items.find(i => i.id === msg.id);
         if (!item) throw new HttpError(404, 'El elemento ya no existe.');
-        if (msg.t === 'item.remove') this.commit(msg, msg.requestId);
+        if (msg.t === 'item.remove') commit(msg, msg.requestId);
         else {
           if (item.locked && Object.keys(msg.patch).some(k => ['x', 'y', 'w', 'h', 'rot'].includes(k))) throw new HttpError(409, 'Desbloquea el elemento antes de moverlo.');
           if (msg.t === 'item.preview') this.broadcast({ t: 'preview', id: item.id, patch: msg.patch }, ws);
@@ -185,7 +242,7 @@ export class Room extends DurableObject<Env> {
               const now = Date.now(), duration = state.media.find(m => m.id === item.mediaId)?.duration ?? 0;
               next = { ...next, position: videoPosition(item, now, duration), startedAt: item.playing ? now : null };
             }
-            this.commit({ t: 'item.upsert', item: next }, msg.requestId);
+            commit({ t: 'item.upsert', item: next }, msg.requestId);
           }
         }
       }
@@ -197,6 +254,8 @@ export class Room extends DurableObject<Env> {
 
   async webSocketClose(ws: WebSocket, code: number, reason: string) {
     if (ws.readyState !== WebSocket.CLOSED) ws.close(code === 1005 || code === 1006 ? 1000 : code, reason);
+    const session = (ws.deserializeAttachment() as Attachment).session;
+    if (session) this.ctx.storage.sql.exec('DELETE FROM edit_history WHERE session=?', session);
     this.presence();
   }
   async webSocketError(ws: WebSocket) { ws.close(1011, 'Conexión interrumpida'); this.presence(); }

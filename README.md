@@ -12,12 +12,13 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Añadir texto editable con fuente, tamaño, color, negrita, cursiva, alineación, contorno, sombra y fondo.
 - Reproducir, pausar y reiniciar vídeos, activar bucle y controlar el sonido del overlay con una barra de volumen de 0 a 100 % por vídeo. El nivel se guarda y se sincroniza entre editores y OBS sin reiniciar la reproducción. Silenciar conserva el nivel elegido; los vídeos anteriores conservan el 100 % hasta ajustarlos. El panel permanece silenciado.
 - Mover, redimensionar, rotar, ocultar, bloquear y ajustar la opacidad de los elementos.
+- Seleccionar varios elementos, moverlos en grupo, alinearlos y duplicarlos; deshacer y rehacer hasta 30 cambios por sesión con protección ante conflictos entre editores.
 - Los elementos ocultos permanecen editables en el panel con una vista al 25 %, borde discontinuo y etiqueta «Oculto», incluso si su opacidad guardada es cero. En OBS no se muestran ni emiten audio. Mostrar restaura la opacidad configurada. Los vídeos ocultos se pausan en el panel; su línea de tiempo compartida continúa y se sincroniza al mostrarlos de nuevo.
 - Colaborar en tiempo real y recuperar el estado al reconectar.
 - Mostrar un overlay transparente de 1920 × 1080, recortado al escenario.
 - Conservar las operaciones confirmadas en SQLite de Durable Objects y los archivos en R2.
 
-La aplicación funciona localmente sin una cuenta de Cloudflare. El usuario ha confirmado el funcionamiento del overlay de imágenes en OBS; los GIF, vídeos, textos, figuras y temporizadores se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. El despliegue público queda pendiente. Todavía no incluye chat de Twitch, historial de deshacer, gestión de usuarios ni revocación de enlaces.
+La aplicación funciona localmente sin una cuenta de Cloudflare. El usuario ha confirmado el funcionamiento del overlay de imágenes en OBS; los GIF, vídeos, textos, figuras y temporizadores se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. El despliegue público queda pendiente. Todavía no incluye chat de Twitch, gestión de usuarios ni revocación de enlaces.
 
 ## Figuras
 
@@ -32,6 +33,18 @@ Añade **Cuenta regresiva** o **Cronómetro** desde los iconos de reloj de la ba
 **Iniciar** comienza o reanuda; **Pausar** conserva el tiempo exacto; **Reiniciar** vuelve al valor inicial y lo deja pausado. Una cuenta finalizada permanece en cero; Iniciar vuelve a comenzar su duración completa. El cronómetro puede superar las 24 horas. Se muestran minutos y segundos, y horas cuando corresponde; las cuentas configuradas para una hora o más conservan ese formato hasta terminar.
 
 Ambos admiten fuente, tamaño, color, negrita, cursiva, alineación, contorno, sombra y fondo, además de transformaciones, opacidad, capas y bloqueo de posición. Ocultar o sacar un temporizador del escenario **no lo pausa**. Un temporizador activo sigue contando aunque cierres el panel o reinicies el servidor; el tiempo se calcula desde la marca de inicio guardada, sin escribir cada segundo en la base de datos. Al reconectar se recuperan el estado y la referencia del reloj del servidor. No se reproducen alarmas ni se disparan acciones automáticas al finalizar.
+
+## Selección múltiple e historial
+
+Usa **Shift + clic** en el lienzo o en Capas para agregar o quitar elementos de la selección. También puedes arrastrar un recuadro desde una zona vacía o usar **Ctrl/⌘ + A**. Los elementos ocultos siguen siendo seleccionables. Arrastra uno de los seleccionados para mover todo el grupo; las flechas mueven 1 px y Shift + flechas, 10 px. Si hay un elemento bloqueado, primero debes desbloquearlo para mover o alinear la selección. El bloqueo protege la posición, no impide duplicar o eliminar.
+
+En Propiedades encontrarás seis opciones de **alineación**. Un elemento se alinea al escenario; para varios, puedes elegir los límites de la selección o el escenario. Se tiene en cuenta la rotación de cada elemento. El tamaño y la rotación se ajustan individualmente.
+
+**Duplicar selección** o **Ctrl/⌘ + D** crea copias desplazadas 24 px, conservando el orden relativo, los estilos, la visibilidad y los archivos originales sin consumir almacenamiento adicional de medios. Los vídeos y temporizadores se copian **pausados en su posición actual**. Supr elimina la selección del escenario, conservando los archivos de la biblioteca.
+
+Los botones **Deshacer / Rehacer**, **Ctrl/⌘ + Z**, **Ctrl/⌘ + Shift + Z** o **Ctrl + Y** recorren hasta 30 cambios recientes de tu sesión (con un límite de tamaño). Mover, alinear, duplicar o eliminar un grupo cuenta como un solo cambio. Una nueva edición descarta la rama de rehacer. Los campos de texto mantienen sus atajos nativos mientras escribes.
+
+El historial se conserva durante la hibernación del servidor y se reinicia al recargar o reconectar el panel; los elementos guardados permanecen. No deshace cargas de archivos. Los controles de reproducción y temporizadores también se guardan: al restaurarlos se recuperan sus marcas de tiempo originales, por lo que un reloj activo refleja el tiempo transcurrido. Si otro editor cambió los elementos afectados o el orden necesario para restaurarlos, se rechaza la operación y se reinicia el historial con un aviso; los cambios en elementos ajenos se conservan.
 
 ## Desarrollo local
 

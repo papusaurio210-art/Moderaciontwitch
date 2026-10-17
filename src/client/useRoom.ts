@@ -10,7 +10,8 @@ export function useRoom(roomId: string, key: string) {
   const [presence, setPresence] = useState({ editors: 0, viewers: 0 });
   const [pending, setPending] = useState(0);
   const [previews, setPreviews] = useState<Record<string, ItemPatch>>({});
-  const [lastAddedId, setLastAddedId] = useState('');
+  const [lastAddedIds, setLastAddedIds] = useState<string[]>([]);
+  const [history, setHistory] = useState({ undo: 0, redo: 0 });
   const [serverOffset, setServerOffset] = useState(0);
   const socket = useRef<WebSocket | null>(null);
   const pendingIds = useRef(new Set<string>());
@@ -51,6 +52,7 @@ export function useRoom(roomId: string, key: string) {
         const msg = JSON.parse(event.data) as ServerMessage;
         if (msg.t === 'welcome' || msg.t === 'state') {
           setServerOffset(msg.serverNow - Date.now());
+          if (msg.t === 'welcome') setHistory({ undo: 0, redo: 0 });
           retry = 0; setStatus('connected'); if (msg.t === 'welcome') setError(''); setRole(msg.role); update(msg.state);
           pendingIds.current.clear(); setPending(0); setPreviews({});
         } else if (msg.t === 'op') {
@@ -61,13 +63,19 @@ export function useRoom(roomId: string, key: string) {
           setPending(pendingIds.current.size);
           if (msg.rev <= previous.rev) return;
           if (msg.rev !== previous.rev + 1) { ws.send(JSON.stringify({ t: 'sync' })); return; }
-          if (own && msg.op.t === 'item.upsert') {
-            const item = msg.op.item;
-            if (!previous.items.some(i => i.id === item.id)) setLastAddedId(item.id);
+          if (own) {
+            const upserts = msg.op.t === 'item.upsert' ? [msg.op.item] : msg.op.t === 'items.change' ? msg.op.upserts : [];
+            const added = upserts.filter(item => !previous.items.some(i => i.id === item.id)).map(i => i.id);
+            if (added.length) setLastAddedIds(added);
           }
           update(applyOperation(previous, msg.op, msg.rev));
-          const id = msg.op.t === 'item.upsert' ? msg.op.item.id : msg.op.t === 'item.remove' ? msg.op.id : null;
-          if (id) setPreviews(current => { const next = { ...current }; delete next[id]; return next; });
+          const ids = msg.op.t === 'item.upsert' ? [msg.op.item.id] : msg.op.t === 'item.remove' ? [msg.op.id]
+            : msg.op.t === 'items.change' ? [...msg.op.upserts.map(i => i.id), ...msg.op.removed] : [];
+          if (ids.length) setPreviews(current => { const next = { ...current }; for (const id of ids) delete next[id]; return next; });
+        } else if (msg.t === 'history') {
+          setHistory({ undo: msg.undo, redo: msg.redo });
+        } else if (msg.t === 'previews') {
+          setPreviews(current => { const next = { ...current }; for (const { id, patch } of msg.patches) { next[id] = patch; previewTimes.current[id] = Date.now(); } return next; });
         } else if (msg.t === 'preview') {
           previewTimes.current[msg.id] = Date.now();
           setPreviews(current => ({ ...current, [msg.id]: { ...current[msg.id], ...msg.patch } }));
@@ -113,7 +121,14 @@ export function useRoom(roomId: string, key: string) {
       lastPreview.current = Date.now(); socket.current.send(JSON.stringify({ t: 'item.preview', id, patch }));
     }
   }, []);
+  const previewMany = useCallback((patches: { id: string; patch: ItemPatch }[], delta: { dx: number; dy: number }) => {
+    setPreviews(current => { const next = { ...current }; for (const { id, patch } of patches) { next[id] = patch; previewTimes.current[id] = Date.now(); } return next; });
+    if (Date.now() - lastPreview.current >= 34 && socket.current?.readyState === WebSocket.OPEN) {
+      lastPreview.current = Date.now(); socket.current.send(JSON.stringify({ t: 'items.preview', ids: patches.map(p => p.id), ...delta }));
+    }
+  }, []);
+  const clearPreviews = useCallback(() => setPreviews({}), []);
   const rendered = state?.items.map(item => ({ ...item, ...previews[item.id] })) ?? [];
-  return { state, role, status, error, setError, presence, pending, rendered, send, preview, lastAddedId, serverOffset, isPreviewing: Object.keys(previews).length > 0 };
+  return { state, role, status, error, setError, presence, pending, rendered, send, preview, previewMany, clearPreviews, lastAddedIds, history, serverOffset, isPreviewing: Object.keys(previews).length > 0 };
 }
 export type RoomConnection = ReturnType<typeof useRoom>;
