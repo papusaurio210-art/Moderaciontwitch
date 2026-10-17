@@ -47,6 +47,9 @@ export interface RoomState {
 }
 export type Role = 'editor' | 'viewer';
 export type EditCommand =
+  | { t: 'stage.resize'; w: number; h: number }
+  | { t: 'clipboard.copy'; ids: string[] }
+  | { t: 'clipboard.paste' }
   | { t: 'items.move'; ids: string[]; dx: number; dy: number }
   | { t: 'items.align'; ids: string[]; alignment: import('./editing').Alignment; target: 'selection' | 'stage' }
   | { t: 'items.duplicate' | 'items.remove'; ids: string[] }
@@ -62,12 +65,14 @@ export type EditCommand =
   | { t: 'item.remove'; id: string }
   | { t: 'item.reorder'; ids: string[] };
 export type Operation =
+  | { t: 'stage.set'; stage: Stage }
   | { t: 'items.change'; upserts: Item[]; removed: string[]; order?: string[] }
   | { t: 'item.upsert'; item: Item }
   | { t: 'item.remove'; id: string }
   | { t: 'item.reorder'; ids: string[] }
   | { t: 'media.add'; media: MediaFile };
 export type ServerMessage =
+  | { t: 'clipboard'; count: number; requestId?: string }
   | { t: 'history'; undo: number; redo: number }
   | { t: 'welcome' | 'state'; role: Role; state: RoomState; serverNow: number }
   | { t: 'op'; rev: number; op: Operation; requestId?: string }
@@ -78,6 +83,7 @@ export type ServerMessage =
 
 export function applyOperation(state: RoomState, op: Operation, rev: number): RoomState {
   switch (op.t) {
+    case 'stage.set': return { ...state, rev, stage: op.stage };
     case 'items.change': {
       const updates = new Map(op.upserts.map(i => [i.id, i]));
       const items = state.items.filter(i => !op.removed.includes(i.id)).map(i => updates.get(i.id) ?? i);

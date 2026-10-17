@@ -27,17 +27,22 @@ export function alignItems(items: Item[], alignment: Alignment, target: Stage): 
   });
 }
 
-export interface HistoryEntry { before: Item[]; after: Item[]; orderBefore?: string[]; orderAfter?: string[] }
+export interface HistoryEntry { before: Item[]; after: Item[]; orderBefore?: string[]; orderAfter?: string[]; stageBefore?: Stage; stageAfter?: Stage }
 export interface EditHistory { undo: HistoryEntry[]; redo: HistoryEntry[] }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-export function historyEntry(before: Item[], after: Item[]): HistoryEntry | null {
+export function historyEntry(before: Item[], after: Item[], stageBefore?: Stage, stageAfter?: Stage): HistoryEntry | null {
   const old = new Map(before.map(i => [i.id, i])), next = new Map(after.map(i => [i.id, i]));
   const changed = new Set([...old.keys(), ...next.keys()].filter(id => !same(old.get(id), next.get(id))));
   const orderBefore = before.map(i => i.id), orderAfter = after.map(i => i.id), reordered = !same(orderBefore, orderAfter);
-  if (!changed.size && !reordered) return null;
-  return { before: before.filter(i => changed.has(i.id)), after: after.filter(i => changed.has(i.id)), ...(reordered ? { orderBefore, orderAfter } : {}) };
+  const resized = stageBefore && stageAfter && !same(stageBefore, stageAfter);
+  if (!changed.size && !reordered && !resized) return null;
+  return { before: before.filter(i => changed.has(i.id)), after: after.filter(i => changed.has(i.id)), ...(reordered ? { orderBefore, orderAfter } : {}), ...(resized ? { stageBefore, stageAfter } : {}) };
 }
 export function historyOperation(state: RoomState, entry: HistoryEntry, direction: 'undo' | 'redo'): Operation | null {
+  if (entry.stageBefore && entry.stageAfter) {
+    if (!same(state.stage, direction === 'undo' ? entry.stageAfter : entry.stageBefore)) return null;
+    return { t: 'stage.set', stage: direction === 'undo' ? entry.stageBefore : entry.stageAfter };
+  }
   const expected = direction === 'undo' ? entry.after : entry.before, restore = direction === 'undo' ? entry.before : entry.after;
   const expectedOrder = direction === 'undo' ? entry.orderAfter : entry.orderBefore, order = direction === 'undo' ? entry.orderBefore : entry.orderAfter;
   const ids = new Set([...expected, ...restore].map(i => i.id));

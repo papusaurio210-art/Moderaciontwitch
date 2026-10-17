@@ -11,6 +11,8 @@ export function useRoom(roomId: string, key: string) {
   const [pending, setPending] = useState(0);
   const [previews, setPreviews] = useState<Record<string, ItemPatch>>({});
   const [lastAddedIds, setLastAddedIds] = useState<string[]>([]);
+  const [clipboardCount, setClipboardCount] = useState(0);
+  const [clipboardCopied, setClipboardCopied] = useState(0);
   const [history, setHistory] = useState({ undo: 0, redo: 0 });
   const [serverOffset, setServerOffset] = useState(0);
   const socket = useRef<WebSocket | null>(null);
@@ -52,7 +54,7 @@ export function useRoom(roomId: string, key: string) {
         const msg = JSON.parse(event.data) as ServerMessage;
         if (msg.t === 'welcome' || msg.t === 'state') {
           setServerOffset(msg.serverNow - Date.now());
-          if (msg.t === 'welcome') setHistory({ undo: 0, redo: 0 });
+          if (msg.t === 'welcome') { setHistory({ undo: 0, redo: 0 }); setClipboardCount(0); }
           retry = 0; setStatus('connected'); if (msg.t === 'welcome') setError(''); setRole(msg.role); update(msg.state);
           pendingIds.current.clear(); setPending(0); setPreviews({});
         } else if (msg.t === 'op') {
@@ -72,6 +74,11 @@ export function useRoom(roomId: string, key: string) {
           const ids = msg.op.t === 'item.upsert' ? [msg.op.item.id] : msg.op.t === 'item.remove' ? [msg.op.id]
             : msg.op.t === 'items.change' ? [...msg.op.upserts.map(i => i.id), ...msg.op.removed] : [];
           if (ids.length) setPreviews(current => { const next = { ...current }; for (const id of ids) delete next[id]; return next; });
+        } else if (msg.t === 'clipboard') {
+          setClipboardCount(msg.count);
+          if (msg.requestId && pendingIds.current.has(msg.requestId)) {
+            pendingIds.current.delete(msg.requestId); setPending(pendingIds.current.size); setClipboardCopied(value => value + 1);
+          }
         } else if (msg.t === 'history') {
           setHistory({ undo: msg.undo, redo: msg.redo });
         } else if (msg.t === 'previews') {
@@ -129,6 +136,6 @@ export function useRoom(roomId: string, key: string) {
   }, []);
   const clearPreviews = useCallback(() => setPreviews({}), []);
   const rendered = state?.items.map(item => ({ ...item, ...previews[item.id] })) ?? [];
-  return { state, role, status, error, setError, presence, pending, rendered, send, preview, previewMany, clearPreviews, lastAddedIds, history, serverOffset, isPreviewing: Object.keys(previews).length > 0 };
+  return { state, role, status, error, setError, presence, pending, rendered, send, preview, previewMany, clearPreviews, lastAddedIds, history, clipboardCount, clipboardCopied, serverOffset, isPreviewing: Object.keys(previews).length > 0 };
 }
 export type RoomConnection = ReturnType<typeof useRoom>;

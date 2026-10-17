@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { EyeOff, ImagePlus, LockKeyhole, Scan, Upload } from 'lucide-react';
 import { clamp, intersectsStage, type Item, type ItemPatch } from '../shared/model';
+import { snapMove, type SnapResult } from '../shared/snapping';
 import { boundsOf, moveItems, selectionBounds } from '../shared/editing';
 import { ItemContent, itemStyle } from './components';
 import type { RoomConnection } from './useRoom';
@@ -9,13 +10,14 @@ export interface View { x: number; y: number; zoom: number }
 interface Props {
   room: RoomConnection; selectedIds: string[]; setSelection: React.Dispatch<React.SetStateAction<string[]>>;
   view: View; setView: React.Dispatch<React.SetStateAction<View>>;
-  grid: boolean; hand: boolean; fitSignal: number;
+  grid: boolean; snap: boolean; hand: boolean; fitSignal: number;
   upload: (files: FileList | File[], at?: { x: number; y: number }) => void; chooseFile: () => void;
 }
 
-export function Canvas({ room, selectedIds, setSelection, view, setView, grid, hand, fitSignal, upload, chooseFile }: Props) {
+export function Canvas({ room, selectedIds, setSelection, view, setView, grid, snap, hand, fitSignal, upload, chooseFile }: Props) {
   const canvas = useRef<HTMLDivElement>(null);
   const viewRef = useRef(view); viewRef.current = view;
+  const [guides, setGuides] = useState<Pick<SnapResult, 'x' | 'y'>>({});
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const group = room.rendered.filter(i => selectedIds.includes(i.id));
   const groupBounds = group.length > 1 ? selectionBounds(group) : null;
@@ -78,6 +80,8 @@ export function Canvas({ room, selectedIds, setSelection, view, setView, grid, h
       moved = true;
       if (mode === 'move') {
         delta = { dx: clamp(Math.round(dx), -100000, 100000), dy: clamp(Math.round(dy), -100000, 100000) };
+        const snapped: SnapResult = snap && !e.altKey ? snapMove(moving, room.rendered, state.stage, delta.dx, delta.dy, 6 / zoom) : delta;
+        setGuides({ x: snapped.x, y: snapped.y }); delta = { dx: snapped.dx, dy: snapped.dy };
         const updated = moveItems(moving, delta.dx, delta.dy);
         room.previewMany(updated.map(i => ({ id: i.id, patch: { x: i.x, y: i.y } })), delta);
         return;
@@ -103,6 +107,7 @@ export function Canvas({ room, selectedIds, setSelection, view, setView, grid, h
     };
     const end = (e: PointerEvent) => {
       node.removeEventListener('pointermove', move); node.removeEventListener('pointerup', end); node.removeEventListener('pointercancel', end);
+      setGuides({});
       if (e.type === 'pointercancel') { room.clearPreviews(); return; }
       if (moved) {
         if (mode === 'move') room.send({ t: 'items.move', ids, ...delta });
@@ -182,6 +187,8 @@ export function Canvas({ room, selectedIds, setSelection, view, setView, grid, h
       </div>)}
       {groupBounds && <div className="group-border" style={{ left: groupBounds.x, top: groupBounds.y, width: groupBounds.w, height: groupBounds.h, borderWidth: 1 / view.zoom }} />}
     </div>
+    {guides.x !== undefined && <div className="snap-guide vertical" data-testid="snap-x" style={{ left: guides.x * view.zoom + view.x }} />}
+    {guides.y !== undefined && <div className="snap-guide horizontal" data-testid="snap-y" style={{ top: guides.y * view.zoom + view.y }} />}
     {marquee && <div className="selection-marquee" style={{ left: marquee.x, top: marquee.y, width: marquee.w, height: marquee.h }} />}
     {state.items.length === 0 && <div className="empty-stage"><span className="empty-art"><ImagePlus size={30} strokeWidth={1.3} /></span>
       <h2>El escenario es tuyo</h2><p>Arrastra un archivo al lienzo<br />y dale personalidad a tu directo.</p>

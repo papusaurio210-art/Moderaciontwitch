@@ -15,7 +15,7 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Seleccionar varios elementos, moverlos en grupo, alinearlos y duplicarlos; deshacer y rehacer hasta 30 cambios por sesión con protección ante conflictos entre editores.
 - Los elementos ocultos permanecen editables en el panel con una vista al 25 %, borde discontinuo y etiqueta «Oculto», incluso si su opacidad guardada es cero. En OBS no se muestran ni emiten audio. Mostrar restaura la opacidad configurada. Los vídeos ocultos se pausan en el panel; su línea de tiempo compartida continúa y se sincroniza al mostrarlos de nuevo.
 - Colaborar en tiempo real y recuperar el estado al reconectar.
-- Mostrar un overlay transparente de 1920 × 1080, recortado al escenario.
+- Mostrar un overlay transparente recortado al escenario; elegir formatos horizontales, verticales, cuadrados o dimensiones personalizadas.
 - Conservar las operaciones confirmadas en SQLite de Durable Objects y los archivos en R2.
 
 La aplicación funciona localmente sin una cuenta de Cloudflare. El usuario ha confirmado el funcionamiento del overlay de imágenes en OBS; los GIF, vídeos, textos, figuras y temporizadores se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. El despliegue público queda pendiente. Todavía no incluye chat de Twitch, gestión de usuarios ni revocación de enlaces.
@@ -45,6 +45,16 @@ En Propiedades encontrarás seis opciones de **alineación**. Un elemento se ali
 Los botones **Deshacer / Rehacer**, **Ctrl/⌘ + Z**, **Ctrl/⌘ + Shift + Z** o **Ctrl + Y** recorren hasta 30 cambios recientes de tu sesión (con un límite de tamaño). Mover, alinear, duplicar o eliminar un grupo cuenta como un solo cambio. Una nueva edición descarta la rama de rehacer. Los campos de texto mantienen sus atajos nativos mientras escribes.
 
 El historial se conserva durante la hibernación del servidor y se reinicia al recargar o reconectar el panel; los elementos guardados permanecen. No deshace cargas de archivos. Los controles de reproducción y temporizadores también se guardan: al restaurarlos se recuperan sus marcas de tiempo originales, por lo que un reloj activo refleja el tiempo transcurrido. Si otro editor cambió los elementos afectados o el orden necesario para restaurarlos, se rechaza la operación y se reinicia el historial con un aviso; los cambios en elementos ajenos se conservan.
+
+## Ajuste magnético, copiar/pegar y formatos
+
+El **imán** de la barra superior activa el ajuste a bordes y centros del escenario y de otros elementos visibles. Las guías verdes aparecen al acercarte a una alineación (6 píxeles de pantalla, independientemente del zoom). Funciona al mover un elemento o un grupo, teniendo en cuenta sus límites rotados. Mantén **Alt** durante el arrastre para ignorarlo temporalmente. Los elementos ocultos no atraen el ajuste; las flechas, las dimensiones numéricas y las manijas siguen permitiendo ajustes libres. La cuadrícula es una ayuda visual independiente.
+
+**Copiar selección / Pegar elementos**, o **Ctrl/⌘ + C / V**, usan un portapapeles propio del panel. Se guarda el contenido confirmado al copiar: puedes editar o eliminar el original y pegar la copia más tarde. Se conservan orden, aspecto, bloqueo y referencias a los archivos. Vídeos y temporizadores se copian pausados en el instante de copiar. Cada pegado desplaza la selección 24 px adicionales y cuenta como un solo paso del historial; copiar no modifica la sala ni consume un paso. El portapapeles se vacía al recargar o reconectar y no se comparte entre pestañas, salas o aplicaciones. Dentro de los campos de texto, C/V mantienen su función habitual.
+
+Pulsa el tamaño de la cabecera o **Configurar escenario** para elegir 720p, 1080p, 1440p, 4K, vertical 1080 × 1920, cuadrado 1080 × 1080 o un tamaño personalizado de **64 a 3840 píxeles por lado**. Aplicar cambia únicamente el área visible: los elementos mantienen su posición y tamaño, incluidos los que queden fuera. El cambio se sincroniza, persiste tras reiniciar y se puede deshacer/rehacer. Los nuevos elementos y la alineación usan las dimensiones actuales.
+
+En OBS, configura el **ancho y alto de la fuente de navegador** con las dimensiones elegidas. El enlace del overlay permanece igual; la ventana de enlaces muestra el tamaño actual. Si el tamaño de la fuente difiere, el overlay se adapta conservando su proporción y puede dejar espacio transparente.
 
 ## Desarrollo local
 

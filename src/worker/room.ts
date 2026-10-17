@@ -3,7 +3,7 @@ import type { Env } from './index';
 import type { Item, MediaFile, Operation, Role, RoomState, ServerMessage, VideoItem } from '../shared/model';
 import { applyOperation, defaultTextStyle, shapeDefaults, videoPosition } from '../shared/model';
 import { alignItems, selectionBounds, moveItems, historyEntry, historyOperation, trimHistory, type EditHistory } from '../shared/editing';
-import { timerElapsed } from '../shared/timers';
+import { copyItems, pasteItems } from '../shared/clipboard';
 import { controlTimer } from '../shared/timers';
 import { sha256 } from '../shared/keys';
 import { bearer, HttpError, json, smallJson } from './http';
@@ -22,6 +22,8 @@ export class Room extends DurableObject<Env> {
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS uploads (id TEXT PRIMARY KEY, bytes INTEGER NOT NULL, created_at INTEGER NOT NULL)');
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS edit_history (session TEXT PRIMARY KEY, history TEXT NOT NULL, updated_at INTEGER NOT NULL)');
     ctx.storage.sql.exec('DELETE FROM edit_history WHERE updated_at < ?', Date.now() - 86400000);
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS clipboard (session TEXT PRIMARY KEY, content TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+    ctx.storage.sql.exec('DELETE FROM clipboard WHERE updated_at < ?', Date.now() - 86400000);
     const row = ctx.storage.sql.exec<{ state: string; editor_hash: string; viewer_hash: string }>('SELECT state, editor_hash, viewer_hash FROM room WHERE id=1').toArray()[0];
     if (row) { this.state = JSON.parse(row.state); this.editorHash = row.editor_hash; this.viewerHash = row.viewer_hash; }
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
@@ -84,12 +86,13 @@ export class Room extends DurableObject<Env> {
     const history = this.history(ws);
     this.send(ws, { t: 'history', undo: history.undo.length, redo: history.redo.length });
   }
-  private commit(op: Operation, requestId?: string, ws?: WebSocket, restoredHistory?: EditHistory) {
+  private commit(op: Operation, requestId?: string, ws?: WebSocket, restoredHistory?: EditHistory, extra?: () => void) {
     const next = applyOperation(this.state!, op, this.state!.rev + 1);
-    const entry = ws && !restoredHistory ? historyEntry(this.state!.items, next.items) : null;
+    const entry = ws && !restoredHistory ? historyEntry(this.state!.items, next.items, this.state!.stage, next.stage) : null;
     // State and undo history are durable together, including DO hibernation.
     this.ctx.storage.transactionSync(() => {
       this.ctx.storage.sql.exec('UPDATE room SET state=? WHERE id=1', JSON.stringify(next));
+      extra?.();
       if (ws && restoredHistory) this.saveHistory(ws, restoredHistory);
       else if (ws && entry) { const history = this.history(ws); history.undo.push(entry); history.redo = []; this.saveHistory(ws, history); }
     });
@@ -97,9 +100,16 @@ export class Room extends DurableObject<Env> {
     this.broadcast({ t: 'op', rev: next.rev, op, requestId });
     if (ws) this.historyStatus(ws);
   }
+  private clipboard(ws: WebSocket): { items: Item[]; offset: number } {
+    const row = this.ctx.storage.sql.exec<{ content: string }>('SELECT content FROM clipboard WHERE session=?', (ws.deserializeAttachment() as Attachment).session).toArray()[0];
+    return row ? JSON.parse(row.content) : { items: [], offset: 0 };
+  }
+  private saveClipboard(ws: WebSocket, items: Item[], offset: number) {
+    this.ctx.storage.sql.exec('INSERT OR REPLACE INTO clipboard VALUES (?, ?, ?)', (ws.deserializeAttachment() as Attachment).session, JSON.stringify({ items, offset }), Date.now());
+  }
   private snapshot(ws: WebSocket, role: Role, t: 'welcome' | 'state') {
     this.send(ws, { t, state: this.state!, role, serverNow: Date.now() });
-    if (role === 'editor') this.historyStatus(ws);
+    if (role === 'editor') { this.historyStatus(ws); this.send(ws, { t: 'clipboard', count: this.clipboard(ws).items.length }); }
   }
   async alarm() {
     for (const ws of this.ctx.getWebSockets()) {
@@ -143,7 +153,22 @@ export class Room extends DurableObject<Env> {
       if (a.role !== 'editor') throw new HttpError(403, 'Este enlace solo permite visualizar.');
       const state = this.state!;
       const commit = (op: Operation, requestId?: string) => this.commit(op, requestId, ws);
-      if (msg.t === 'history.undo' || msg.t === 'history.redo') {
+      if (msg.t === 'stage.resize') {
+        commit({ t: 'stage.set', stage: { ...state.stage, w: msg.w, h: msg.h } }, msg.requestId);
+      } else if (msg.t === 'clipboard.copy') {
+        const items = state.items.filter(i => msg.ids.includes(i.id));
+        if (items.length !== msg.ids.length) throw new HttpError(409, 'Algún elemento ya no existe. Vuelve a seleccionarlos.');
+        this.saveClipboard(ws, copyItems(items, state.media, Date.now()), 0);
+        this.send(ws, { t: 'clipboard', count: items.length, requestId: msg.requestId });
+      } else if (msg.t === 'clipboard.paste') {
+        const clipboard = this.clipboard(ws);
+        if (!clipboard.items.length) throw new HttpError(409, 'Copia una selección en este panel antes de pegar.');
+        if (state.items.length + clipboard.items.length > 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
+        if (clipboard.items.some(i => 'mediaId' in i && !state.media.some(m => m.id === i.mediaId))) throw new HttpError(409, 'Un archivo copiado ya no está disponible.');
+        const offset = Math.min(100000, clipboard.offset + 24);
+        this.commit({ t: 'items.change', upserts: pasteItems(clipboard.items, offset), removed: [] }, msg.requestId, ws, undefined,
+          () => this.saveClipboard(ws, clipboard.items, offset));
+      } else if (msg.t === 'history.undo' || msg.t === 'history.redo') {
         const history = this.history(ws), direction = msg.t === 'history.undo' ? 'undo' : 'redo';
         const entry = history[direction].at(-1);
         if (!entry) throw new HttpError(409, 'No hay cambios para deshacer o rehacer en esta sesión.');
@@ -167,11 +192,7 @@ export class Room extends DurableObject<Env> {
         if (msg.t === 'items.align') upserts = alignItems(items, msg.alignment, msg.target === 'stage' || items.length === 1 ? state.stage : selectionBounds(items));
         if (msg.t === 'items.duplicate') {
           if (state.items.length + items.length > 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
-          const now = Date.now();
-          upserts = moveItems(items, 24, 24).map(item => ({ ...item, id: crypto.randomUUID(), name: `${item.name.slice(0, 112)} (copia)`,
-            ...(item.type === 'video' ? { playing: false, startedAt: null, position: videoPosition(item, now, state.media.find(m => m.id === item.mediaId)?.duration ?? 0) } : {}),
-            ...(item.type === 'timer' ? { running: false, startedAt: null, elapsedMs: timerElapsed(item, now) } : {}),
-          }));
+          upserts = pasteItems(copyItems(items, state.media, Date.now()), 24);
         }
         if (upserts.some(i => Math.abs(i.x) > 100000 || Math.abs(i.y) > 100000)) throw new HttpError(400, 'La alineación supera el límite del lienzo.');
         commit({ t: 'items.change', upserts, removed }, msg.requestId);
@@ -255,7 +276,10 @@ export class Room extends DurableObject<Env> {
   async webSocketClose(ws: WebSocket, code: number, reason: string) {
     if (ws.readyState !== WebSocket.CLOSED) ws.close(code === 1005 || code === 1006 ? 1000 : code, reason);
     const session = (ws.deserializeAttachment() as Attachment).session;
-    if (session) this.ctx.storage.sql.exec('DELETE FROM edit_history WHERE session=?', session);
+    if (session) {
+      this.ctx.storage.sql.exec('DELETE FROM edit_history WHERE session=?', session);
+      this.ctx.storage.sql.exec('DELETE FROM clipboard WHERE session=?', session);
+    }
     this.presence();
   }
   async webSocketError(ws: WebSocket) { ws.close(1011, 'Conexión interrumpida'); this.presence(); }

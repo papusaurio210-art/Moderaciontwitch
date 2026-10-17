@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Grid2X2, Hand,
   Image as ImageIcon, ImagePlus, Keyboard, Layers, Link, LoaderCircle, LockKeyhole, Maximize, Minus,
-  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer, Undo2, Redo2 } from 'lucide-react';
+  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer, Undo2, Redo2, Magnet, ClipboardPaste } from 'lucide-react';
 import { clamp, shapeDefaults, type ItemPatch, type ShapeKind, type TimerKind } from '../shared/model';
 import { viewerKeyFromEditor } from '../shared/keys';
 import { Brand, ConnectionBadge, ViewerCount, MediaThumbnail, ItemIcon } from './components';
@@ -9,6 +9,7 @@ import { Canvas, type View } from './Canvas';
 import type { RoomConnection } from './useRoom';
 import { NumberField, NameField, TextProperties, VideoProperties, ShapeProperties } from './Properties';
 import { TimerProperties } from './TimerProperties';
+import { StageSettings } from './StageSettings';
 import { SelectionTools } from './SelectionTools';
 import { inspectFile } from './media';
 
@@ -25,6 +26,8 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   const select = (id: string, toggle = false) => setSelection(current => toggle ? current.includes(id) ? current.filter(i => i !== id) : [...current, id] : [id]);
   const [tab, setTab] = useState<'library' | 'layers'>('library');
   const [search, setSearch] = useState('');
+  const [snap, setSnap] = useState(true);
+  const [stageSettings, setStageSettings] = useState(false);
   const [grid, setGrid] = useState(true);
   const [hand, setHand] = useState(false);
   const [view, setView] = useState<View>({ x: 0, y: 0, zoom: .4 });
@@ -43,11 +46,12 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
 
   useEffect(() => { void viewerKeyFromEditor(editorKey).then(setViewerKey); }, [editorKey]);
   useEffect(() => { if (room.lastAddedIds.length) setSelection(room.lastAddedIds); }, [room.lastAddedIds]);
+  useEffect(() => { if (room.clipboardCopied) setNotice('Selección copiada. Puedes pegarla en este panel.'); }, [room.clipboardCopied]);
   useEffect(() => { document.title = `${state.name} · Overlay Studio`; }, [state.name]);
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 3200); return () => clearTimeout(timer); }, [notice]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (/INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName) || help || links) return;
+      if (/INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName) || help || links || stageSettings) return;
       if ((event.ctrlKey || event.metaKey) && event.key === '0') { event.preventDefault(); setFitSignal(n => n + 1); }
       if (event.key === 'Escape') setSelection([]);
       if (!enabled) return;
@@ -58,7 +62,9 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
         if (!room.pending && room.history[redo ? 'redo' : 'undo']) room.send({ t: redo ? 'history.redo' : 'history.undo' });
         return;
       }
+      if (modifier && key === 'v') { event.preventDefault(); if (!room.pending && room.clipboardCount) room.send({ t: 'clipboard.paste' }); return; }
       if (!selectedIds.length || room.pending) return;
+      if (modifier && key === 'c') { event.preventDefault(); room.send({ t: 'clipboard.copy', ids: selectedIds }); return; }
       if (modifier && key === 'd') { event.preventDefault(); room.send({ t: 'items.duplicate', ids: selectedIds }); return; }
       if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); room.send({ t: 'items.remove', ids: selectedIds }); }
       if (!selectedItems.some(i => i.locked) && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
@@ -70,7 +76,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
       }
     };
     window.addEventListener('keydown', keydown); return () => window.removeEventListener('keydown', keydown);
-  }, [selection, state.items, enabled, room.send, room.pending, room.history, help, links]);
+  }, [selection, state.items, enabled, room.send, room.pending, room.history, room.clipboardCount, help, links, stageSettings]);
 
   async function upload(files: FileList | File[], at?: { x: number; y: number }) {
     if (!enabled || uploading) return;
@@ -116,7 +122,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   function zoomBy(factor: number) { setView(v => ({ ...v, zoom: clamp(v.zoom * factor, .08, 2) })); }
 
   return <div className="studio">
-    <header className="studio-header"><div className="studio-identity"><Brand compact /><span className="header-divider" /><div className="room-title"><strong>{state.name}</strong><span>Estudio de overlays</span></div><span className="resolution-tag">1080p</span></div>
+    <header className="studio-header"><div className="studio-identity"><Brand compact /><span className="header-divider" /><div className="room-title"><strong>{state.name}</strong><span>Estudio de overlays</span></div><button className="resolution-tag stage-button" aria-label="Tamaño del escenario" title="Cambiar tamaño del escenario" onClick={() => setStageSettings(true)} disabled={!enabled}>{state.stage.w} × {state.stage.h}</button></div>
       <div className="header-status"><ConnectionBadge status={room.status} /><ViewerCount count={room.presence.viewers} /></div>
       <div className="header-actions"><button className="secondary-button overlay-preview" onClick={() => window.open(overlayUrl, '_blank', 'noopener,noreferrer')} disabled={!viewerKey}><ExternalLink size={14} />Ver overlay</button>
         <button className="primary-button" onClick={() => void copy(overlayUrl, 'Enlace del overlay copiado')} disabled={!viewerKey}><Copy size={14} /><span>Copiar enlace OBS</span></button>
@@ -165,12 +171,12 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
           {!state.items.length && <div className="empty-library"><Layers size={25} /><strong>Todo en su sitio</strong><p>Los elementos que añadas aparecerán en esta lista.</p></div>}
         </div><p className="layers-help">Shift + clic para seleccionar varias. Las capas superiores se dibujan al frente.</p></>}
       </aside>
-      <main className="workspace"><div className="canvas-toolbar"><div className="workspace-label"><Layers size={14} /><span>Escenario principal</span></div>
-        <div className="canvas-controls"><Tool label="Deshacer" onClick={() => room.send({ t: 'history.undo' })} disabled={!enabled || !!room.pending || !room.history.undo}><Undo2 size={15} /></Tool><Tool label="Rehacer" onClick={() => room.send({ t: 'history.redo' })} disabled={!enabled || !!room.pending || !room.history.redo}><Redo2 size={15} /></Tool><span className="toolbar-divider" /><Tool label="Mostrar cuadrícula" active={grid} onClick={() => setGrid(g => !g)}><Grid2X2 size={15} /></Tool><span className="toolbar-divider" />
+      <main className="workspace"><div className="canvas-toolbar"><div className="workspace-label"><Layers size={14} /><span>Escenario principal</span><Tool label="Configurar escenario" onClick={() => setStageSettings(true)} disabled={!enabled}><Settings2 size={14} /></Tool></div>
+        <div className="canvas-controls"><Tool label="Deshacer" onClick={() => room.send({ t: 'history.undo' })} disabled={!enabled || !!room.pending || !room.history.undo}><Undo2 size={15} /></Tool><Tool label="Rehacer" onClick={() => room.send({ t: 'history.redo' })} disabled={!enabled || !!room.pending || !room.history.redo}><Redo2 size={15} /></Tool><span className="toolbar-divider" /><Tool label="Copiar selección" onClick={() => room.send({ t: 'clipboard.copy', ids: selectedIds })} disabled={!enabled || !!room.pending || !selectedIds.length}><Copy size={15} /></Tool><Tool label="Pegar elementos" onClick={() => room.send({ t: 'clipboard.paste' })} disabled={!enabled || !!room.pending || !room.clipboardCount}><ClipboardPaste size={15} /></Tool><Tool label="Ajuste magnético" active={snap} onClick={() => setSnap(value => !value)}><Magnet size={15} /></Tool><Tool label="Mostrar cuadrícula" active={grid} onClick={() => setGrid(g => !g)}><Grid2X2 size={15} /></Tool><span className="toolbar-divider" />
           <Tool label="Alejar" onClick={() => zoomBy(1 / 1.2)}><Minus size={14} /></Tool><span className="zoom-value">{Math.round(view.zoom * 100)}%</span><Tool label="Acercar" onClick={() => zoomBy(1.2)}><Plus size={14} /></Tool>
           <button className="fit-button" title="Ajustar al escenario (Ctrl+0)" onClick={() => setFitSignal(n => n + 1)}><Maximize size={13} /><span>Ajustar</span></button></div>
       </div>
-        <Canvas room={room} selectedIds={selectedIds} setSelection={setSelection} view={view} setView={setView} grid={grid} hand={hand} fitSignal={fitSignal} upload={(files, at) => void upload(files, at)} chooseFile={() => fileInput.current?.click()} />
+        <Canvas room={room} selectedIds={selectedIds} setSelection={setSelection} view={view} setView={setView} grid={grid} snap={snap} hand={hand} fitSignal={fitSignal} upload={(files, at) => void upload(files, at)} chooseFile={() => fileInput.current?.click()} />
         <footer className="canvas-footer"><span className={`save-state ${room.pending || room.status !== 'connected' ? 'pending' : ''}`}>{room.pending ? <LoaderCircle className="spin" size={13} /> : <CheckCheck size={14} />}
           {room.status !== 'connected' ? 'Esperando conexión' : room.pending ? 'Guardando cambios…' : room.isPreviewing ? 'Editando en vivo…' : 'Cambios guardados'}</span>
           <span>{state.items.length} {state.items.length === 1 ? 'elemento' : 'elementos'}<i />{state.stage.w} × {state.stage.h}<span className="footer-transparent"><i />Fondo transparente</span></span></footer>
@@ -208,10 +214,11 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
     <input ref={fileInput} type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,.mp4,.webm,.gif" multiple hidden aria-label="Subir archivos" onChange={e => e.target.files && void upload(e.target.files)} />
     {room.error && <div className="toast error-toast" role="alert"><span>{room.error}</span><button aria-label="Cerrar aviso" onClick={() => room.setError('')}><X size={15} /></button></div>}
     {notice && <div className="toast" role="status"><Check size={16} /><span>{notice}</span></div>}
+    {stageSettings && <StageSettings room={room} close={() => setStageSettings(false)} />}
     {help && <div className="modal-backdrop" onMouseDown={() => setHelp(false)}><section className="modal" role="dialog" aria-modal="true" aria-label="Atajos de teclado" onMouseDown={e => e.stopPropagation()}><button className="modal-close" aria-label="Cerrar" onClick={() => setHelp(false)}><X size={18} /></button><Keyboard className="modal-icon" /><h2>Un poco más de control</h2><p>Pequeños atajos para grandes directos.</p>
-      <dl className="shortcuts"><dt>Mover el lienzo</dt><dd>Espacio + arrastrar</dd><dt>Acercar o alejar</dt><dd>Rueda del ratón</dd><dt>Ajustar escenario</dt><dd>Ctrl / ⌘ + 0</dd><dt>Selección múltiple</dt><dd>Shift + clic · arrastrar un recuadro</dd><dt>Seleccionar todo</dt><dd>Ctrl / ⌘ + A</dd><dt>Duplicar selección</dt><dd>Ctrl / ⌘ + D</dd><dt>Deshacer / rehacer</dt><dd>Ctrl / ⌘ + Z · Shift + Z</dd><dt>Mover selección</dt><dd>Flechas · Shift: 10 px</dd><dt>Eliminar elemento</dt><dd>Supr / Retroceso</dd><dt>Redimensionar libremente</dt><dd>Shift + manija</dd><dt>Rotar en pasos de 15°</dt><dd>Shift + rotación</dd><dt>Quitar selección</dt><dd>Esc</dd></dl></section></div>}
+      <dl className="shortcuts"><dt>Mover el lienzo</dt><dd>Espacio + arrastrar</dd><dt>Acercar o alejar</dt><dd>Rueda del ratón</dd><dt>Ajustar escenario</dt><dd>Ctrl / ⌘ + 0</dd><dt>Selección múltiple</dt><dd>Shift + clic · arrastrar un recuadro</dd><dt>Seleccionar todo</dt><dd>Ctrl / ⌘ + A</dd><dt>Copiar / pegar en este panel</dt><dd>Ctrl / ⌘ + C · V</dd><dt>Ignorar ajuste magnético</dt><dd>Alt + arrastrar</dd><dt>Duplicar selección</dt><dd>Ctrl / ⌘ + D</dd><dt>Deshacer / rehacer</dt><dd>Ctrl / ⌘ + Z · Shift + Z</dd><dt>Mover selección</dt><dd>Flechas · Shift: 10 px</dd><dt>Eliminar elemento</dt><dd>Supr / Retroceso</dd><dt>Redimensionar libremente</dt><dd>Shift + manija</dd><dt>Rotar en pasos de 15°</dt><dd>Shift + rotación</dd><dt>Quitar selección</dt><dd>Esc</dd></dl></section></div>}
     {links && <div className="modal-backdrop" onMouseDown={() => setLinks(false)}><section className="modal links-modal" role="dialog" aria-modal="true" aria-label="Enlaces del estudio" onMouseDown={e => e.stopPropagation()}><button className="modal-close" aria-label="Cerrar" onClick={() => setLinks(false)}><X size={18} /></button><Link className="modal-icon" /><h2>Conecta tu estudio</h2><p>Guarda estos enlaces para volver a tu sala.</p>
-      <label>Overlay para OBS<span className="link-description">Añade una fuente de navegador de 1920 × 1080.</span><input readOnly value={overlayUrl} onFocus={e => e.currentTarget.select()} /></label><button className="secondary-button" onClick={() => void copy(overlayUrl, 'Enlace del overlay copiado')}><Copy size={14} />Copiar enlace de visualización</button>
+      <label>Overlay para OBS<span className="link-description">Añade una fuente de navegador de {state.stage.w} × {state.stage.h}.</span><input readOnly value={overlayUrl} onFocus={e => e.currentTarget.select()} /></label><button className="secondary-button" onClick={() => void copy(overlayUrl, 'Enlace del overlay copiado')}><Copy size={14} />Copiar enlace de visualización</button>
       <label>Panel de edición<span className="link-description">Comparte este enlace solo con quienes puedan editar.</span><input readOnly value={editUrl} onFocus={e => e.currentTarget.select()} /></label><button className="secondary-button" onClick={() => void copy(editUrl, 'Enlace del panel copiado')}><Copy size={14} />Copiar enlace de edición</button>
     </section></div>}
   </div>;

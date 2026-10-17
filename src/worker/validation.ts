@@ -26,6 +26,9 @@ export const itemPatch = z.object({ ...geometry,
 const ids = z.array(id).min(1).max(500).refine(ids => new Set(ids).size === ids.length);
 const requestId = z.string().max(80).optional();
 export const clientMessage = z.discriminatedUnion('t', [
+  z.object({ t: z.literal('stage.resize'), w: z.number().int().min(64).max(3840), h: z.number().int().min(64).max(3840), requestId }).strict(),
+  z.object({ t: z.literal('clipboard.copy'), ids, requestId }).strict(),
+  z.object({ t: z.literal('clipboard.paste'), requestId }).strict(),
   z.object({ t: z.literal('items.preview'), ids, dx: coordinate, dy: coordinate }).strict(),
   z.object({ t: z.literal('items.move'), ids, dx: coordinate, dy: coordinate, requestId }).strict(),
   z.object({ t: z.literal('items.align'), ids, alignment: z.enum(alignments), target: z.enum(['selection', 'stage']), requestId }).strict(),

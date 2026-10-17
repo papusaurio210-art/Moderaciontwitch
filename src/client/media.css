@@ -45,3 +45,15 @@
 .group-border{position:absolute;pointer-events:none;border:1px dashed #b59bff}
 .canvas-item.locked{pointer-events:auto;cursor:default}
 .panning .canvas-item.locked{pointer-events:none}
+
+.snap-guide{position:absolute;pointer-events:none;background:#42e6c2;z-index:5}
+.snap-guide.vertical{top:0;bottom:0;width:1px}
+.snap-guide.horizontal{left:0;right:0;height:1px}
+.stage-button{cursor:pointer;color:#c8c0df}
+.stage-settings select{padding:10px;background:#12151d;border:1px solid #303645;border-radius:7px;color:inherit}
+.stage-dimensions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:18px 0}
+.stage-dimensions label{display:flex;flex-direction:column;gap:8px;font-size:11px}
+.stage-dimensions input{width:100%}
+.stage-settings>.primary-button{width:100%;justify-content:center}
+@media(max-width:1150px){.workspace-label>span{display:none}}
+@media(max-width:930px){.canvas-toolbar{height:auto;min-height:48px;flex-wrap:wrap;padding-top:6px;padding-bottom:6px;gap:4px}.canvas-controls{flex-wrap:wrap}}
