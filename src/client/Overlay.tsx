@@ -19,9 +19,9 @@ export function Overlay({ room }: { room: RoomConnection }) {
     <div className={`overlay-clip ${debug ? 'debug-border' : ''}`} data-testid="overlay-stage"
       style={{ width: state.stage.w * scale, height: state.stage.h * scale }}>
       <div style={{ position: 'relative', width: state.stage.w, height: state.stage.h, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-        {room.rendered.filter(item => item.visible && intersectsStage(item, state.stage) && (item.type === 'text' || state.media.some(m => m.id === item.mediaId))).map(item =>
+        {room.rendered.filter(item => item.visible && intersectsStage(item, state.stage) && (!('mediaId' in item) || state.media.some(m => m.id === item.mediaId))).map(item =>
           <div className="overlay-item" key={item.id} data-item-id={item.id} style={{ ...itemStyle(item), left: item.x - state.stage.x, top: item.y - state.stage.y }}>
-            <ItemContent roomId={state.roomId} item={item} media={item.type === 'text' ? undefined : state.media.find(m => m.id === item.mediaId)} serverOffset={room.serverOffset} />
+            <ItemContent roomId={state.roomId} item={item} media={'mediaId' in item ? state.media.find(m => m.id === item.mediaId) : undefined} serverOffset={room.serverOffset} />
           </div>)}
       </div>
     </div>

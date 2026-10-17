@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { clamp, videoPosition, type BaseItem, type ItemPatch, type TextItem, type VideoItem } from '../shared/model';
+import { clamp, videoPosition, type BaseItem, type ItemPatch, type ShapeItem, type TextItem, type VideoItem } from '../shared/model';
 import type { RoomConnection } from './useRoom';
 
 export function NumberField({ label, value, onSave, min, max, suffix = '', disabled = false }: { label: string; value: number; onSave: (n: number) => void; min: number; max: number; suffix?: string; disabled?: boolean }) {
@@ -46,6 +46,21 @@ export function TextProperties({ item, save }: { item: TextItem; save: (patch: I
     <label className="check-field"><input type="checkbox" checked={item.background !== null} onChange={e => save({ background: e.target.checked ? '#111318' : null })} />Fondo del texto</label>
     {item.background !== null && <label className="color-field">Color de fondo<input type="color" aria-label="Color de fondo" value={item.background} onChange={e => save({ background: e.target.value })} /></label>}
     <p className="property-note">El texto se ajusta al ancho. Aumenta el alto si se recortan líneas.</p>
+  </section>;
+}
+export function ShapeProperties({ item, save }: { item: ShapeItem; save: (patch: ItemPatch) => void }) {
+  const closed = item.shape === 'rect' || item.shape === 'ellipse';
+  return <section className="property-section shape-properties"><h3>Apariencia</h3>
+    {closed && <>
+      <label className="check-field"><input type="checkbox" checked={item.fill !== null}
+        onChange={e => save({ fill: e.target.checked ? '#8c70ff' : null })} />Relleno de la figura</label>
+      {item.fill !== null && <label className="color-field">Color de relleno<input type="color" aria-label="Color de relleno" value={item.fill}
+        onChange={e => save({ fill: e.target.value })} /></label>}
+    </>}
+    <label className="color-field">{closed ? 'Color del borde' : 'Color del trazo'}<input type="color"
+      aria-label={closed ? 'Color del borde' : 'Color del trazo'} value={item.borderColor} onChange={e => save({ borderColor: e.target.value })} /></label>
+    <NumberField label={closed ? 'Grosor del borde' : 'Grosor del trazo'} value={item.borderWidth} min={0} max={64} suffix="px" onSave={borderWidth => save({ borderWidth })} />
+    <p className="property-note">{closed ? 'Sin relleno y con borde puedes crear un marco.' : 'Usa la rotación para orientar el trazo y el ancho para cambiar su longitud.'}</p>
   </section>;
 }
 function VolumeControl({ volume, save, pending }: { volume: number; save: (patch: ItemPatch) => void; pending: number }) {

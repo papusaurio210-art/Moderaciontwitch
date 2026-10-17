@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Image as ImageIcon, Radio, Triangle } from 'lucide-react';
+import { ArrowRight, Circle, Film, Image as ImageIcon, Minus, Radio, Square, Triangle, Type } from 'lucide-react';
 import { mediaUrl, videoPosition, type BaseItem, type Item, type MediaFile, type VideoItem } from '../shared/model';
+import { ShapeContent } from './ShapeContent';
+
+export function ItemIcon({ item, size = 14 }: { item: Item; size?: number }) {
+  const Icon = item.type === 'shape' ? { rect: Square, ellipse: Circle, line: Minus, arrow: ArrowRight }[item.shape]
+    : item.type === 'text' ? Type : item.type === 'video' ? Film : ImageIcon;
+  return <Icon size={size} />;
+}
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return <a className="brand" href="/" aria-label="Overlay Studio, inicio"><span className="brand-mark"><Triangle size={17} fill="currentColor" /></span>
@@ -42,6 +49,7 @@ function VideoContent({ src, item, editor, active, serverOffset }: { src: string
 export function ItemContent({ roomId, item, media, editor = false, active = true, serverOffset = 0 }: {
   roomId: string; item: Item; media?: MediaFile; editor?: boolean; active?: boolean; serverOffset?: number;
 }) {
+  if (item.type === 'shape') return <ShapeContent item={item} />;
   if (item.type === 'text') return <div className="item-text" style={{ fontFamily: item.fontFamily, fontSize: item.fontSize,
     fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? 'italic' : 'normal', color: item.color,
     textAlign: item.align, WebkitTextStroke: `${item.strokeWidth}px ${item.strokeColor}`, paintOrder: 'stroke fill',

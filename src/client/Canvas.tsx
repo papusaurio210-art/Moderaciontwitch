@@ -116,7 +116,7 @@ export function Canvas({ room, selectedId, select, view, setView, grid, hand, fi
         style={{ ...itemStyle(item), opacity: 1, '--handle-scale': 1 / view.zoom } as React.CSSProperties}
         onPointerDown={e => dragItem(e, item)}>
         <div className="canvas-item-content" style={{ opacity: item.visible ? item.opacity : .25 }}>
-          <ItemContent roomId={state.roomId} item={item} media={item.type === 'text' ? undefined : state.media.find(m => m.id === item.mediaId)} editor active={item.visible && intersectsStage(item, state.stage)} serverOffset={room.serverOffset} />
+          <ItemContent roomId={state.roomId} item={item} media={'mediaId' in item ? state.media.find(m => m.id === item.mediaId) : undefined} editor active={item.visible && intersectsStage(item, state.stage)} serverOffset={room.serverOffset} />
         </div>
         {!item.visible && <>
           <div className="hidden-item-border" style={{ borderWidth: 1 / view.zoom }} />
@@ -126,8 +126,8 @@ export function Canvas({ room, selectedId, select, view, setView, grid, hand, fi
           <div className="selection-border" style={{ borderWidth: 1.5 / view.zoom }} />
           <div className="selection-label">{item.locked && <LockKeyhole size={10} />}{!intersectsStage(item, state.stage) ? 'Fuera del escenario' : item.name}</div>
           {!item.locked && <><i className="corner tl" /><i className="corner tr" /><i className="corner bl" />
-            <button aria-label="Redimensionar imagen" className="corner br resize-handle" onPointerDown={e => dragItem(e, item, 'resize')} />
-            <button aria-label="Rotar imagen" className="rotate-handle" onPointerDown={e => dragItem(e, item, 'rotate')} />
+            <button aria-label="Redimensionar elemento" className="corner br resize-handle" onPointerDown={e => dragItem(e, item, 'resize')} />
+            <button aria-label="Rotar elemento" className="rotate-handle" onPointerDown={e => dragItem(e, item, 'rotate')} />
           </>}
           <span className="selection-measures">{Math.round(item.w)} × {Math.round(item.h)} · {Math.round(item.rot)}°</span>
         </>}

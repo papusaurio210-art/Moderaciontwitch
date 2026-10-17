@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './index';
 import type { Item, MediaFile, Operation, Role, RoomState, ServerMessage, VideoItem } from '../shared/model';
-import { applyOperation, defaultTextStyle, videoPosition } from '../shared/model';
+import { applyOperation, defaultTextStyle, shapeDefaults, videoPosition } from '../shared/model';
 import { sha256 } from '../shared/keys';
 import { bearer, HttpError, json, smallJson } from './http';
 import { clientMessage, mediaMime, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_ROOM_BYTES } from './validation';
@@ -122,6 +122,10 @@ export class Room extends DurableObject<Env> {
         this.commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'text', name: 'Texto',
           text: 'Tu texto aquí', x: msg.x, y: msg.y, w: 720, h: 180, rot: 0,
           opacity: 1, visible: true, locked: false, ...defaultTextStyle } }, msg.requestId);
+      } else if (msg.t === 'shape.add') {
+        if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
+        this.commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'shape', shape: msg.shape,
+          x: msg.x, y: msg.y, rot: 0, opacity: 1, visible: true, locked: false, ...shapeDefaults[msg.shape] } }, msg.requestId);
       } else if (msg.t === 'item.add') {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
         const media = state.media.find(m => m.id === msg.mediaId);
@@ -156,7 +160,10 @@ export class Room extends DurableObject<Env> {
           else {
             const textFields = ['text', ...Object.keys(defaultTextStyle)];
             if (Object.keys(msg.patch).some(k => (textFields.includes(k) && item.type !== 'text')
-              || (['loop', 'muted', 'volume'].includes(k) && item.type !== 'video') || (k === 'fit' && item.type === 'text'))) {
+              || (['loop', 'muted', 'volume'].includes(k) && item.type !== 'video')
+              || (['fill', 'borderColor', 'borderWidth'].includes(k) && item.type !== 'shape')
+              || (k === 'fill' && item.type === 'shape' && ['line', 'arrow'].includes(item.shape))
+              || (k === 'fit' && !('mediaId' in item)))) {
               throw new HttpError(400, 'Estas propiedades no corresponden al tipo de elemento.');
             }
             let next = { ...item, ...msg.patch } as Item;

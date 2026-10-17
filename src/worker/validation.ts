@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { shapeKinds } from '../shared/model';
 
 const coordinate = z.number().finite().min(-100_000).max(100_000);
 const id = z.string().uuid();
@@ -18,6 +19,7 @@ export const itemPatch = z.object({ ...geometry,
   strokeWidth: z.number().finite().min(0).max(16), shadow: z.boolean(), background: color.nullable(),
   fit: z.enum(['contain', 'cover', 'fill']), loop: z.boolean(), muted: z.boolean(),
   volume: z.number().finite().min(0).max(1),
+  fill: color.nullable(), borderColor: color, borderWidth: z.number().finite().min(0).max(64),
 }).partial().strict().refine(p => Object.keys(p).length > 0);
 const requestId = z.string().max(80).optional();
 export const clientMessage = z.discriminatedUnion('t', [
@@ -25,6 +27,7 @@ export const clientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('sync') }).strict(),
   z.object({ t: z.literal('item.add'), mediaId: id, x: coordinate, y: coordinate, requestId }).strict(),
   z.object({ t: z.literal('text.add'), x: coordinate, y: coordinate, requestId }).strict(),
+  z.object({ t: z.literal('shape.add'), shape: z.enum(shapeKinds), x: coordinate, y: coordinate, requestId }).strict(),
   z.object({ t: z.literal('video.control'), id, action: z.enum(['play', 'pause', 'restart']), requestId }).strict(),
   z.object({ t: z.literal('item.patch'), id, patch: itemPatch, requestId }).strict(),
   z.object({ t: z.literal('item.preview'), id, patch: previewPatch }).strict(),

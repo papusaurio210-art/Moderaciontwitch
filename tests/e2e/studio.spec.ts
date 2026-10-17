@@ -119,7 +119,7 @@ test('transformaciones, capas y cambios compartidos entre dos editores', async (
   await page.getByRole('button', { name: 'Desbloquear elemento', exact: true }).click();
   await setField(page, 'Rotación', '0');
   await expect(viewer.locator('.overlay-item')).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 0)');
-  const handle = (await page.getByRole('button', { name: 'Redimensionar imagen' }).boundingBox())!;
+  const handle = (await page.getByRole('button', { name: 'Redimensionar elemento' }).boundingBox())!;
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2); await page.mouse.down();
   await page.mouse.move(handle.x + 40, handle.y + 25, { steps: 6 }); await page.mouse.up();
   await expect.poll(async () => Number(await other.getByRole('spinbutton', { name: 'Ancho', exact: true }).inputValue())).toBeGreaterThan(500);

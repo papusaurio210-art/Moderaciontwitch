@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Grid2X2, Hand,
   Image as ImageIcon, ImagePlus, Keyboard, Layers, Link, LoaderCircle, LockKeyhole, Maximize, Minus,
-  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Film } from 'lucide-react';
-import { clamp, type ItemPatch } from '../shared/model';
+  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight } from 'lucide-react';
+import { clamp, shapeDefaults, type ItemPatch, type ShapeKind } from '../shared/model';
 import { viewerKeyFromEditor } from '../shared/keys';
-import { Brand, ConnectionBadge, ViewerCount, MediaThumbnail } from './components';
+import { Brand, ConnectionBadge, ViewerCount, MediaThumbnail, ItemIcon } from './components';
 import { Canvas, type View } from './Canvas';
 import type { RoomConnection } from './useRoom';
-import { NumberField, NameField, TextProperties, VideoProperties } from './Properties';
+import { NumberField, NameField, TextProperties, VideoProperties, ShapeProperties } from './Properties';
 import { inspectFile } from './media';
 
 function Tool({ label, active, onClick, children, disabled }: { label: string; active?: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
@@ -31,7 +31,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   const fileInput = useRef<HTMLInputElement>(null);
   const enabled = room.status === 'connected' && room.role === 'editor';
   const selected = room.rendered.find(i => i.id === selectedId);
-  const media = selected && selected.type !== 'text' ? state.media.find(m => m.id === selected.mediaId) : null;
+  const media = selected && 'mediaId' in selected ? state.media.find(m => m.id === selected.mediaId) : null;
   const overlayUrl = viewerKey ? `${location.origin}/overlay/${state.roomId}?k=${viewerKey}` : '';
   const editUrl = `${location.origin}/panel/${state.roomId}#key=${editorKey}`;
 
@@ -89,6 +89,11 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
     [ids[from], ids[to]] = [ids[to], ids[from]];
     room.send({ t: 'item.reorder', ids });
   }
+  function addShape(shape: ShapeKind) {
+    const size = shapeDefaults[shape];
+    setHand(false);
+    room.send({ t: 'shape.add', shape, x: state.stage.x + (state.stage.w - size.w) / 2, y: state.stage.y + (state.stage.h - size.h) / 2 });
+  }
   function zoomBy(factor: number) { setView(v => ({ ...v, zoom: clamp(v.zoom * factor, .08, 2) })); }
 
   return <div className="studio">
@@ -103,6 +108,11 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
         <Tool label="Mover lienzo" active={hand} onClick={() => setHand(true)}><Hand size={20} /></Tool><span className="rail-divider" />
         <Tool label="Añadir archivo" onClick={() => fileInput.current?.click()} disabled={!enabled || uploading}><ImagePlus size={21} /></Tool>
         <Tool label="Añadir texto" onClick={() => room.send({ t: 'text.add', x: 120, y: 120 })} disabled={!enabled}><Type size={21} /></Tool>
+        <span className="rail-divider" />
+        <Tool label="Añadir rectángulo" onClick={() => addShape('rect')} disabled={!enabled}><Square size={20} /></Tool>
+        <Tool label="Añadir círculo" onClick={() => addShape('ellipse')} disabled={!enabled}><Circle size={20} /></Tool>
+        <Tool label="Añadir línea" onClick={() => addShape('line')} disabled={!enabled}><Minus size={20} /></Tool>
+        <Tool label="Añadir flecha" onClick={() => addShape('arrow')} disabled={!enabled}><ArrowRight size={20} /></Tool>
         <div className="rail-bottom"><Tool label="Atajos de teclado" onClick={() => setHelp(true)}><Keyboard size={19} /></Tool></div>
       </nav>
       <aside className="library-panel"><div className="sidebar-tabs" role="tablist" aria-label="Contenido del estudio">
@@ -126,7 +136,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
             <span className="upload-formats">IMÁGENES / GIF: 25 MB · VÍDEO: 50 MB</span></div>
         </> : <><div className="library-subtitle"><span>ORDEN DEL ESCENARIO</span><span>{state.items.length} elementos</span></div><div className="layers-list">
           {[...state.items].reverse().map(item => <div className={`layer-row ${item.id === selectedId ? 'selected' : ''}`} key={item.id}>
-            <button className="layer-select" onClick={() => setSelectedId(item.id)}><ImageIcon size={15} /><span>{item.name}</span></button>
+            <button className="layer-select" onClick={() => setSelectedId(item.id)}><ItemIcon item={item} size={15} /><span>{item.name}</span></button>
             <button aria-label={`${item.visible ? 'Ocultar' : 'Mostrar'} ${item.name}`} disabled={!enabled} onClick={() => room.send({ t: 'item.patch', id: item.id, patch: { visible: !item.visible } })}>{item.visible ? <Eye size={13} /> : <EyeOff size={13} />}</button>
             <button aria-label={`${item.locked ? 'Desbloquear' : 'Bloquear'} ${item.name}`} disabled={!enabled} onClick={() => room.send({ t: 'item.patch', id: item.id, patch: { locked: !item.locked } })}>{item.locked ? <LockKeyhole size={13} /> : <UnlockKeyhole size={13} />}</button>
           </div>)}
@@ -145,12 +155,13 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
       </main>
       <aside className="properties-panel"><div className="properties-heading"><span><span className="purple-dot" />PROPIEDADES</span><Settings2 size={15} /></div>
         {selected ? <fieldset className="properties-content" disabled={!enabled}>
-          <div className="selected-type"><span>{selected.type === 'text' ? <Type size={14} /> : selected.type === 'video' ? <Film size={14} /> : <ImageIcon size={14} />}{ { image: 'Imagen', gif: 'GIF animado', video: 'Vídeo', text: 'Texto' }[selected.type] }</span><div><Tool label={selected.visible ? 'Ocultar elemento' : 'Mostrar elemento'} onClick={() => save({ visible: !selected.visible })}>{selected.visible ? <Eye size={15} /> : <EyeOff size={15} />}</Tool>
+          <div className="selected-type"><span><ItemIcon item={selected} />{selected.type === 'shape' ? shapeDefaults[selected.shape].name : { image: 'Imagen', gif: 'GIF animado', video: 'Vídeo', text: 'Texto' }[selected.type]}</span><div><Tool label={selected.visible ? 'Ocultar elemento' : 'Mostrar elemento'} onClick={() => save({ visible: !selected.visible })}>{selected.visible ? <Eye size={15} /> : <EyeOff size={15} />}</Tool>
             <Tool label={selected.locked ? 'Desbloquear elemento' : 'Bloquear elemento'} active={selected.locked} onClick={() => save({ locked: !selected.locked })}>{selected.locked ? <LockKeyhole size={14} /> : <UnlockKeyhole size={14} />}</Tool></div></div>
-          <NameField key={selected.id} item={selected} save={save} />
-          {selected.type === 'text' && <TextProperties key={selected.id} item={selected} save={save} />}
+          <NameField key={`name:${selected.id}`} item={selected} save={save} />
+          {selected.type === 'shape' && <ShapeProperties key={`shape:${selected.id}`} item={selected} save={save} />}
+          {selected.type === 'text' && <TextProperties key={`text:${selected.id}`} item={selected} save={save} />}
           {selected.type === 'video' && <VideoProperties item={selected} save={save} send={room.send} duration={media?.duration} serverOffset={room.serverOffset} pending={room.pending} />}
-          {selected.type !== 'text' && <label className="property-label media-fit">AJUSTE<select aria-label="Ajuste del archivo" value={selected.fit ?? 'contain'} onChange={e => save({ fit: e.target.value as 'contain' | 'cover' | 'fill' })}><option value="contain">Contener</option><option value="cover">Cubrir</option><option value="fill">Estirar</option></select></label>}
+          {'mediaId' in selected && <label className="property-label media-fit">AJUSTE<select aria-label="Ajuste del archivo" value={selected.fit ?? 'contain'} onChange={e => save({ fit: e.target.value as 'contain' | 'cover' | 'fill' })}><option value="contain">Contener</option><option value="cover">Cubrir</option><option value="fill">Estirar</option></select></label>}
           <section className="property-section"><h3>Transformación<span>PX</span></h3><div className="number-grid">
             <NumberField label="X" value={selected.x} min={-100000} max={100000} onSave={x => save({ x })} disabled={selected.locked} />
             <NumberField label="Y" value={selected.y} min={-100000} max={100000} onSave={y => save({ y })} disabled={selected.locked} />

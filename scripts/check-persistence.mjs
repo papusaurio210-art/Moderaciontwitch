@@ -86,7 +86,15 @@ try {
       await socket(page, room, { t: 'item.patch', id: added.op.item.id, patch: { volume: .35 } });
     }
   }
-  const before = await socket(page, room); assert.equal(before.rev, 10);
+  for (const shape of ['rect', 'ellipse', 'line', 'arrow']) {
+    const added = await socket(page, room, { t: 'shape.add', shape, x: 400, y: 500 });
+    await socket(page, room, { t: 'item.patch', id: added.op.item.id, patch: {
+      borderColor: '#12efab', borderWidth: 12, opacity: .6, rot: 25, visible: false,
+      ...(shape === 'rect' || shape === 'ellipse' ? { fill: null } : {}),
+    } });
+  }
+  const before = await socket(page, room); assert.equal(before.rev, 18);
+  assert.equal(before.items.filter(item => item.type === 'shape').length, 4);
   assert.equal(before.items.find(item => item.type === 'video').playing, false);
   assert.equal(before.items.find(item => item.type === 'video').volume, .35);
   await page.close(); await stop(); await start();
@@ -106,7 +114,7 @@ try {
     const body = await (await fetch(origin + path)).text();
     assert.ok(!body.includes(admin) && !body.includes('export interface Env'), 'Los archivos privados no deben servirse.');
   }
-  console.log('OK: sala, imágenes, GIF, vídeo pausado con volumen y texto recuperados tras un reinicio real; cabeceras y archivos privados verificados.');
+  console.log('OK: sala, imágenes, GIF, vídeo con volumen, texto y cuatro figuras con estilos recuperados tras un reinicio real; cabeceras y archivos privados verificados.');
 } finally {
   await browser?.close(); await stop(); await rm(statePath, { recursive: true, force: true });
 }
