@@ -2,3 +2,8 @@
 @media(min-width:1600px){.library-panel{width:270px}.properties-panel{width:280px}.media-thumb{height:100px}.studio-header{height:68px}.sidebar-tabs,.canvas-toolbar,.properties-heading{height:52px}}
 @media(max-width:1150px){.library-panel{width:200px}.properties-panel{width:220px}.header-status{gap:6px}.viewer-count{display:none}.studio-identity{min-width:200px}.room-title strong{max-width:130px}.resolution-tag{display:none}.canvas-topnote>span:last-child{display:none}.workspace-label{font-size:9px}.canvas-toolbar{padding:0 8px}.fit-button{margin-left:3px}.footer-transparent{display:none}.header-actions .secondary-button{font-size:10px}.media-list{gap:7px;padding:0 10px}.library-search{margin-left:10px;margin-right:10px}.media-thumb{height:68px}}
 @media(max-width:930px){.library-panel{width:180px}.properties-panel{width:200px}.tool-rail{width:48px}.studio-header{padding:0 10px}.header-status{display:none}.canvas-controls{gap:0}.workspace-label>span{display:none}.empty-stage h2{font-size:14px}.empty-stage p{font-size:10px}.canvas-hint{font-size:7px}.room-title strong{max-width:160px}}
+
+/* Editor-only visibility guides stay readable independently of content opacity. */
+.canvas-item-content{position:absolute;inset:0;pointer-events:none}
+.hidden-item-border{position:absolute;inset:0;border:1px dashed #9ba5b8;pointer-events:none}
+.hidden-item-label{position:absolute;left:0;top:0;display:flex;align-items:center;gap:5px;padding:4px 6px;background:#252a35ed;color:#d5dbea;border:1px solid #647087;border-radius:3px;font:10px 'Inter',sans-serif;white-space:nowrap;pointer-events:none;transform-origin:top left;transform:scale(var(--handle-scale)) translate(6px,6px)}

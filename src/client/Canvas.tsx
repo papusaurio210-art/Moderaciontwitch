@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { ImagePlus, LockKeyhole, Scan, Upload } from 'lucide-react';
+import { EyeOff, ImagePlus, LockKeyhole, Scan, Upload } from 'lucide-react';
 import { clamp, intersectsStage, type Item, type ItemPatch } from '../shared/model';
 import { ItemContent, itemStyle } from './components';
 import type { RoomConnection } from './useRoom';
@@ -107,15 +107,21 @@ export function Canvas({ room, selectedId, select, view, setView, grid, hand, fi
       if (mediaId) room.send({ t: 'item.add', mediaId, ...at }); else upload(e.dataTransfer.files, at);
     }}>
     {grid && <div className="canvas-grid" style={{ backgroundSize: `${40 * view.zoom}px ${40 * view.zoom}px`, backgroundPosition: `${view.x}px ${view.y}px` }} />}
-    <div className="canvas-topnote"><span>ESCENARIO</span><span>Todo lo que queda dentro aparece en tu overlay</span></div>
+    <div className="canvas-topnote"><span>ESCENARIO</span><span>Los elementos visibles dentro aparecen en tu overlay</span></div>
     <div className="world" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})` }}>
       <div className="stage-paper" style={{ width: state.stage.w, height: state.stage.h }} />
       <div className="stage-caption" style={{ transform: `scale(${1 / view.zoom})` }}><span className="stage-dot" />OVERLAY · {state.stage.w} × {state.stage.h}</div>
-      {room.rendered.filter(i => i.visible).map(item => <div key={item.id} data-item-id={item.id}
-        className={`canvas-item ${selectedId === item.id ? 'selected' : ''} ${item.locked ? 'locked' : ''}`}
-        style={{ ...itemStyle(item), '--handle-scale': 1 / view.zoom } as React.CSSProperties}
+      {room.rendered.map(item => <div key={item.id} data-item-id={item.id}
+        className={`canvas-item ${selectedId === item.id ? 'selected' : ''} ${item.locked ? 'locked' : ''} ${!item.visible ? 'is-hidden' : ''}`}
+        style={{ ...itemStyle(item), opacity: 1, '--handle-scale': 1 / view.zoom } as React.CSSProperties}
         onPointerDown={e => dragItem(e, item)}>
-        <ItemContent roomId={state.roomId} item={item} media={item.type === 'text' ? undefined : state.media.find(m => m.id === item.mediaId)} editor active={intersectsStage(item, state.stage)} serverOffset={room.serverOffset} />
+        <div className="canvas-item-content" style={{ opacity: item.visible ? item.opacity : .25 }}>
+          <ItemContent roomId={state.roomId} item={item} media={item.type === 'text' ? undefined : state.media.find(m => m.id === item.mediaId)} editor active={item.visible && intersectsStage(item, state.stage)} serverOffset={room.serverOffset} />
+        </div>
+        {!item.visible && <>
+          <div className="hidden-item-border" style={{ borderWidth: 1 / view.zoom }} />
+          <span className="hidden-item-label"><EyeOff size={11} />Oculto</span>
+        </>}
         {selectedId === item.id && <>
           <div className="selection-border" style={{ borderWidth: 1.5 / view.zoom }} />
           <div className="selection-label">{item.locked && <LockKeyhole size={10} />}{!intersectsStage(item, state.stage) ? 'Fuera del escenario' : item.name}</div>

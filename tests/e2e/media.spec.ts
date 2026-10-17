@@ -34,6 +34,12 @@ test('texto editable, formato, seguridad y persistencia entre panel y overlay', 
   await expect(viewer.locator('.item-text')).toHaveCSS('text-align', 'center');
   await expect(viewer.locator('.item-text')).toHaveCSS('background-color', 'rgb(17, 19, 24)');
   await expect(viewer.locator('.item-text')).toHaveCSS('-webkit-text-stroke-width', '2px');
+  await page.getByRole('button', { name: 'Ocultar elemento', exact: true }).click();
+  await expect(viewer.locator('.item-text')).toHaveCount(0);
+  await expect(page.locator('.canvas-item .item-text')).toHaveText(text);
+  await expect(page.locator('.hidden-item-label')).toHaveText('Oculto');
+  await page.getByRole('button', { name: 'Mostrar elemento', exact: true }).click();
+  await expect(viewer.locator('.item-text')).toHaveText(text);
   await number(page, 'X', '320');
   await expect(viewer.locator('.overlay-item')).toHaveCSS('left', '320px');
   await viewer.reload(); await page.reload();
@@ -74,6 +80,11 @@ test('GIF animado en el overlay y miniatura estática en la biblioteca', async (
   expect(await file.body()).toEqual(readFileSync('tests/fixtures/motion.gif'));
   await page.getByLabel('Ajuste del archivo').selectOption('cover');
   await expect(viewer.locator('.overlay-item img')).toHaveCSS('object-fit', 'cover');
+  await page.getByRole('button', { name: 'Ocultar elemento', exact: true }).click();
+  await expect(viewer.locator('.overlay-item')).toHaveCount(0);
+  await expect(page.locator('.canvas-item img')).toBeVisible();
+  await expect(page.locator('.hidden-item-label')).toHaveText('Oculto');
+  await page.getByRole('button', { name: 'Mostrar elemento', exact: true }).click();
   await viewer.reload(); await expect(viewer.locator('.overlay-item img')).toBeVisible();
   await viewer.close();
 });
@@ -104,6 +115,25 @@ for (const extension of ['mp4', 'webm']) test(`vídeo ${extension}: reproducció
   await page.getByRole('button', { name: 'Reiniciar vídeo', exact: true }).click();
   await expect(video).toHaveJSProperty('paused', false);
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeLessThan(1.5);
+  await page.getByLabel('Sonido en el overlay', { exact: true }).click();
+  await expect(video).toHaveJSProperty('muted', false);
+  // Keep a reference to the removed video to verify it stops playing, not just
+  // that it disappears visually while audio could continue in the background.
+  const removedVideo = await video.elementHandle();
+  await page.getByRole('button', { name: 'Ocultar elemento', exact: true }).click();
+  await expect(video).toHaveCount(0);
+  await expect.poll(() => removedVideo!.evaluate((el: HTMLVideoElement) => el.paused)).toBe(true);
+  await expect(page.locator('.canvas-item video')).toHaveJSProperty('paused', true);
+  await expect(page.locator('.canvas-item video')).toHaveJSProperty('muted', true);
+  await expect(page.locator('.hidden-item-label')).toHaveText('Oculto');
+  await viewer.reload(); await expect(viewer.getByTestId('overlay-stage')).toBeVisible();
+  await expect(video).toHaveCount(0);
+  await page.getByRole('button', { name: 'Mostrar elemento', exact: true }).click();
+  await expect(video).toHaveJSProperty('muted', false);
+  await page.getByLabel('Sonido en el overlay', { exact: true }).click();
+  await expect(video).toHaveJSProperty('muted', true);
+  await expect(video).toHaveJSProperty('paused', false);
+  await removedVideo!.dispose();
   await number(page, 'X', '2200');
   await expect(viewer.locator('.overlay-item video')).toHaveCount(0);
   await expect(page.locator('.canvas-item video')).toHaveJSProperty('paused', true);

@@ -10,6 +10,7 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Añadir texto editable con fuente, tamaño, color, negrita, cursiva, alineación, contorno, sombra y fondo.
 - Reproducir, pausar y reiniciar vídeos, activar bucle y controlar el sonido del overlay.
 - Mover, redimensionar, rotar, ocultar, bloquear y ajustar la opacidad de los elementos.
+- Los elementos ocultos permanecen editables en el panel con una vista al 25 %, borde discontinuo y etiqueta «Oculto», incluso si su opacidad guardada es cero. En OBS no se muestran ni emiten audio. Mostrar restaura la opacidad configurada. Los vídeos ocultos se pausan en el panel; su línea de tiempo compartida continúa y se sincroniza al mostrarlos de nuevo.
 - Colaborar en tiempo real y recuperar el estado al reconectar.
 - Mostrar un overlay transparente de 1920 × 1080, recortado al escenario.
 - Conservar las operaciones confirmadas en SQLite de Durable Objects y los archivos en R2.
