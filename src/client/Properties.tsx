@@ -48,8 +48,23 @@ export function TextProperties({ item, save }: { item: TextItem; save: (patch: I
     <p className="property-note">El texto se ajusta al ancho. Aumenta el alto si se recortan líneas.</p>
   </section>;
 }
-export function VideoProperties({ item, save, send, duration = 0, serverOffset }: {
-  item: VideoItem; save: (patch: ItemPatch) => void; send: RoomConnection['send']; duration?: number; serverOffset: number;
+function VolumeControl({ volume, save, pending }: { volume: number; save: (patch: ItemPatch) => void; pending: number }) {
+  const percent = Math.round(volume * 100);
+  const [draft, setDraft] = useState(percent);
+  const [adjusting, setAdjusting] = useState(false);
+  // Keep the latest local input until all of this editor's changes have been
+  // acknowledged; an older acknowledgement must not move the thumb backwards.
+  useEffect(() => { if (!adjusting && pending === 0) setDraft(percent); }, [percent, adjusting, pending]);
+  return <label className="volume-control"><span>Volumen<output>{draft}%</output></span>
+    <input type="range" aria-label="Volumen del vídeo" aria-valuetext={`${draft}%`} min={0} max={100} step={1} value={draft}
+      onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); setAdjusting(true); }}
+      onPointerUp={() => setAdjusting(false)} onPointerCancel={() => setAdjusting(false)}
+      onKeyDown={() => setAdjusting(true)} onKeyUp={() => setAdjusting(false)} onBlur={() => setAdjusting(false)}
+      onChange={e => { const value = Number(e.target.value); setDraft(value); save({ volume: value / 100 }); }} />
+  </label>;
+}
+export function VideoProperties({ item, save, send, duration = 0, serverOffset, pending }: {
+  item: VideoItem; save: (patch: ItemPatch) => void; send: RoomConnection['send']; duration?: number; serverOffset: number; pending: number;
 }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -65,6 +80,7 @@ export function VideoProperties({ item, save, send, duration = 0, serverOffset }
       <button className="secondary-button" onClick={() => send({ t: 'video.control', id: item.id, action: 'restart' })}>Reiniciar vídeo</button></div>
     <label className="check-field"><input type="checkbox" checked={item.loop} onChange={e => save({ loop: e.target.checked })} />Repetir vídeo</label>
     <label className="check-field"><input type="checkbox" checked={!item.muted} onChange={e => save({ muted: !e.target.checked })} />Sonido en el overlay</label>
+    <VolumeControl key={item.id} volume={item.volume ?? 1} save={save} pending={pending} />
     <p className="property-note">El panel permanece en silencio. Para mezclar el sonido, activa «Controlar audio vía OBS» en la fuente de navegador.</p>
   </section>;
 }

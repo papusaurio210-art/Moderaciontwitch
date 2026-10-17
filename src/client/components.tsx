@@ -13,6 +13,9 @@ export function ConnectionBadge({ status }: { status: string }) {
 function VideoContent({ src, item, editor, active, serverOffset }: { src: string; item: VideoItem; editor: boolean; active: boolean; serverOffset: number }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [error, setError] = useState('');
+  // Old rooms have no volume field. Apply audio gain separately so adjusting
+  // it never tears down playback or restarts the shared timeline.
+  useEffect(() => { if (ref.current) ref.current.volume = item.volume ?? 1; }, [item.volume, src]);
   useEffect(() => {
     const video = ref.current!; let disposed = false, blocked = false;
     setError('');

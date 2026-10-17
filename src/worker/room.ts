@@ -131,7 +131,7 @@ export class Room extends DurableObject<Env> {
           x: msg.x, y: msg.y, w: media.width * scale, h: media.height * scale, rot: 0,
           opacity: 1, visible: true, locked: false, fit: 'contain' as const };
         const item: Item = media.mime.startsWith('video/')
-          ? { ...base, type: 'video', loop: true, muted: true, playing: true, position: 0, startedAt: Date.now() }
+          ? { ...base, type: 'video', loop: true, muted: true, volume: 1, playing: true, position: 0, startedAt: Date.now() }
           : { ...base, type: media.mime === 'image/gif' ? 'gif' : 'image' };
         this.commit({ t: 'item.upsert', item }, msg.requestId);
       } else if (msg.t === 'video.control') {
@@ -156,7 +156,7 @@ export class Room extends DurableObject<Env> {
           else {
             const textFields = ['text', ...Object.keys(defaultTextStyle)];
             if (Object.keys(msg.patch).some(k => (textFields.includes(k) && item.type !== 'text')
-              || (['loop', 'muted'].includes(k) && item.type !== 'video') || (k === 'fit' && item.type === 'text'))) {
+              || (['loop', 'muted', 'volume'].includes(k) && item.type !== 'video') || (k === 'fit' && item.type === 'text'))) {
               throw new HttpError(400, 'Estas propiedades no corresponden al tipo de elemento.');
             }
             let next = { ...item, ...msg.patch } as Item;

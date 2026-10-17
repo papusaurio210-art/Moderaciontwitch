@@ -8,7 +8,7 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Compartir enlaces distintos para editar y visualizar. El visor no puede modificar la sala.
 - Subir PNG, JPG, WebP, GIF animados, MP4 y WebM, reutilizarlos desde la biblioteca y organizarlos por capas.
 - Añadir texto editable con fuente, tamaño, color, negrita, cursiva, alineación, contorno, sombra y fondo.
-- Reproducir, pausar y reiniciar vídeos, activar bucle y controlar el sonido del overlay.
+- Reproducir, pausar y reiniciar vídeos, activar bucle y controlar el sonido del overlay con una barra de volumen de 0 a 100 % por vídeo. El nivel se guarda y se sincroniza entre editores y OBS sin reiniciar la reproducción. Silenciar conserva el nivel elegido; los vídeos anteriores conservan el 100 % hasta ajustarlos. El panel permanece silenciado.
 - Mover, redimensionar, rotar, ocultar, bloquear y ajustar la opacidad de los elementos.
 - Los elementos ocultos permanecen editables en el panel con una vista al 25 %, borde discontinuo y etiqueta «Oculto», incluso si su opacidad guardada es cero. En OBS no se muestran ni emiten audio. Mostrar restaura la opacidad configurada. Los vídeos ocultos se pausan en el panel; su línea de tiempo compartida continúa y se sincroniza al mostrarlos de nuevo.
 - Colaborar en tiempo real y recuperar el estado al reconectar.
@@ -55,7 +55,7 @@ Pulsa **Subir archivos** o arrastra un GIF o vídeo al lienzo. Los GIF se animan
 
 Para vídeos usa **MP4 con H.264** o **WebM con VP8/VP9**. La extensión MP4 no garantiza que el códec sea compatible: la aplicación comprueba la decodificación en el navegador antes de subir, pero no convierte archivos. MOV, AVI y otros formatos necesitan conversión previa. La duración máxima es de 24 horas.
 
-Al seleccionar un vídeo aparecen **Pausar/Reproducir**, **Reiniciar**, **Repetir vídeo**, **Sonido en el overlay** y el ajuste **Contener/Cubrir/Estirar**. Los vídeos empiezan con bucle y en silencio. El panel permanece siempre silenciado para evitar audio duplicado. Para mezclar el sonido del overlay, activa **Controlar audio vía OBS** en la fuente de navegador; otros navegadores pueden bloquear reproducción con sonido hasta recibir una interacción.
+Al seleccionar un vídeo aparecen **Pausar/Reproducir**, **Reiniciar**, **Repetir vídeo**, **Sonido en el overlay**, la barra **Volumen** (0–100 %) y el ajuste **Contener/Cubrir/Estirar**. Los vídeos empiezan con bucle, volumen al 100 % y en silencio: activa **Sonido en el overlay** para escucharlos. Puedes preparar el volumen mientras están silenciados; silenciar y volver a activar el sonido conserva ese nivel. La barra responde al ratón y a las flechas del teclado. El panel permanece siempre silenciado para evitar audio duplicado. Para mezclar el sonido del overlay, activa **Controlar audio vía OBS** en la fuente de navegador; otros navegadores pueden bloquear reproducción con sonido hasta recibir una interacción. Se controla el audio incluido en MP4/WebM; la subida de archivos de audio independientes (MP3/WAV) todavía no está disponible.
 
 La posición de reproducción se calcula a partir del reloj del servidor. Un visor que se reconecta recupera el instante correspondiente; los visores corrigen desviaciones superiores a unos 450 ms, sin prometer sincronización exacta de fotogramas. Los vídeos fuera del escenario se pausan en el panel y se desmontan en el overlay. Al volver a mostrarlos recuperan la línea temporal compartida. Pausa el vídeo si quieres congelar también esa línea temporal.
 

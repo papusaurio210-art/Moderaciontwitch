@@ -17,6 +17,7 @@ export const itemPatch = z.object({ ...geometry,
   align: z.enum(['left', 'center', 'right']), strokeColor: color,
   strokeWidth: z.number().finite().min(0).max(16), shadow: z.boolean(), background: color.nullable(),
   fit: z.enum(['contain', 'cover', 'fill']), loop: z.boolean(), muted: z.boolean(),
+  volume: z.number().finite().min(0).max(1),
 }).partial().strict().refine(p => Object.keys(p).length > 0);
 const requestId = z.string().max(80).optional();
 export const clientMessage = z.discriminatedUnion('t', [

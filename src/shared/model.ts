@@ -8,7 +8,7 @@ export type Fit = 'contain' | 'cover' | 'fill';
 export interface ImageItem extends BaseItem { type: 'image' | 'gif'; mediaId: string; fit?: Fit }
 export interface VideoItem extends BaseItem {
   type: 'video'; mediaId: string; fit: Fit;
-  loop: boolean; muted: boolean; playing: boolean; position: number; startedAt: number | null;
+  loop: boolean; muted: boolean; volume?: number; playing: boolean; position: number; startedAt: number | null;
 }
 export interface TextStyle {
   fontFamily: 'Inter' | 'JetBrains Mono' | 'Arial' | 'Georgia'; fontSize: number;
@@ -17,7 +17,7 @@ export interface TextStyle {
 }
 export interface TextItem extends BaseItem, TextStyle { type: 'text'; text: string }
 export type Item = ImageItem | VideoItem | TextItem;
-export type ItemPatch = Partial<Omit<BaseItem, 'id'> & TextStyle & { text: string; fit: Fit; loop: boolean; muted: boolean }>;
+export type ItemPatch = Partial<Omit<BaseItem, 'id'> & TextStyle & { text: string; fit: Fit; loop: boolean; muted: boolean; volume: number }>;
 export const defaultTextStyle: TextStyle = {
   fontFamily: 'Inter', fontSize: 64, color: '#ffffff', bold: true, italic: false, align: 'left',
   strokeColor: '#000000', strokeWidth: 0, shadow: false, background: null,

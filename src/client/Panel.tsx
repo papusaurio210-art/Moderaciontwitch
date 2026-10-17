@@ -149,7 +149,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
             <Tool label={selected.locked ? 'Desbloquear elemento' : 'Bloquear elemento'} active={selected.locked} onClick={() => save({ locked: !selected.locked })}>{selected.locked ? <LockKeyhole size={14} /> : <UnlockKeyhole size={14} />}</Tool></div></div>
           <NameField key={selected.id} item={selected} save={save} />
           {selected.type === 'text' && <TextProperties key={selected.id} item={selected} save={save} />}
-          {selected.type === 'video' && <VideoProperties item={selected} save={save} send={room.send} duration={media?.duration} serverOffset={room.serverOffset} />}
+          {selected.type === 'video' && <VideoProperties item={selected} save={save} send={room.send} duration={media?.duration} serverOffset={room.serverOffset} pending={room.pending} />}
           {selected.type !== 'text' && <label className="property-label media-fit">AJUSTE<select aria-label="Ajuste del archivo" value={selected.fit ?? 'contain'} onChange={e => save({ fit: e.target.value as 'contain' | 'cover' | 'fill' })}><option value="contain">Contener</option><option value="cover">Cubrir</option><option value="fill">Estirar</option></select></label>}
           <section className="property-section"><h3>Transformación<span>PX</span></h3><div className="number-grid">
             <NumberField label="X" value={selected.x} min={-100000} max={100000} onSave={x => save({ x })} disabled={selected.locked} />

@@ -34,4 +34,10 @@ describe('validación de texto y controles', () => {
   it.each([{ fontSize: 0 }, { text: 'x'.repeat(4001) }, { color: 'url(https://example.com)' }, { fontFamily: 'Unknown' }, { strokeWidth: 17 }, { playing: true }, { startedAt: 0 }])('rechaza propiedades fuera del contrato', patch => {
     expect(clientMessage.safeParse({ t: 'item.patch', id: crypto.randomUUID(), patch }).success).toBe(false);
   });
+  it.each([0, .35, 1])('acepta volumen %s', volume => {
+    expect(clientMessage.safeParse({ t: 'item.patch', id: crypto.randomUUID(), patch: { volume } }).success).toBe(true);
+  });
+  it.each([-.01, 1.01, NaN, Infinity, '50', null])('rechaza volumen inválido %s', volume => {
+    expect(clientMessage.safeParse({ t: 'item.patch', id: crypto.randomUUID(), patch: { volume } }).success).toBe(false);
+  });
 });
