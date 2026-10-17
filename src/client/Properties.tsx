@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { clamp, videoPosition, type BaseItem, type ItemPatch, type ShapeItem, type TextItem, type VideoItem } from '../shared/model';
+import { clamp, videoPosition, type BaseItem, type ItemPatch, type ShapeItem, type TextItem, type TimerItem, type VideoItem } from '../shared/model';
 import type { RoomConnection } from './useRoom';
 
 export function NumberField({ label, value, onSave, min, max, suffix = '', disabled = false }: { label: string; value: number; onSave: (n: number) => void; min: number; max: number; suffix?: string; disabled?: boolean }) {
@@ -27,9 +27,9 @@ function TextField({ item, save }: { item: TextItem; save: (patch: ItemPatch) =>
     onFocus={() => { editing.current = true; }} onBlur={() => { editing.current = false; setDraft(item.text); }}
     onChange={e => { setDraft(e.target.value); save({ text: e.target.value }); }} /></label>;
 }
-export function TextProperties({ item, save }: { item: TextItem; save: (patch: ItemPatch) => void }) {
-  return <section className="property-section text-properties"><h3>Texto</h3>
-    <TextField item={item} save={save} />
+export function TextProperties({ item, save }: { item: TextItem | TimerItem; save: (patch: ItemPatch) => void }) {
+  return <section className="property-section text-properties"><h3>{item.type === 'timer' ? 'Apariencia' : 'Texto'}</h3>
+    {item.type === 'text' && <TextField item={item} save={save} />}
     <label className="property-label">FUENTE<select aria-label="Fuente del texto" value={item.fontFamily} onChange={e => save({ fontFamily: e.target.value as TextItem['fontFamily'] })}>
       {['Inter', 'JetBrains Mono', 'Arial', 'Georgia'].map(font => <option key={font}>{font}</option>)}
     </select></label>
@@ -45,7 +45,7 @@ export function TextProperties({ item, save }: { item: TextItem; save: (patch: I
     <label className="check-field"><input type="checkbox" checked={item.shadow} onChange={e => save({ shadow: e.target.checked })} />Sombra del texto</label>
     <label className="check-field"><input type="checkbox" checked={item.background !== null} onChange={e => save({ background: e.target.checked ? '#111318' : null })} />Fondo del texto</label>
     {item.background !== null && <label className="color-field">Color de fondo<input type="color" aria-label="Color de fondo" value={item.background} onChange={e => save({ background: e.target.value })} /></label>}
-    <p className="property-note">El texto se ajusta al ancho. Aumenta el alto si se recortan líneas.</p>
+    <p className="property-note">{item.type === 'timer' ? 'Aumenta el ancho o el alto si se recorta el tiempo.' : 'El texto se ajusta al ancho. Aumenta el alto si se recortan líneas.'}</p>
   </section>;
 }
 export function ShapeProperties({ item, save }: { item: ShapeItem; save: (patch: ItemPatch) => void }) {

@@ -2,6 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 import type { Env } from './index';
 import type { Item, MediaFile, Operation, Role, RoomState, ServerMessage, VideoItem } from '../shared/model';
 import { applyOperation, defaultTextStyle, shapeDefaults, videoPosition } from '../shared/model';
+import { controlTimer } from '../shared/timers';
 import { sha256 } from '../shared/keys';
 import { bearer, HttpError, json, smallJson } from './http';
 import { clientMessage, mediaMime, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_ROOM_BYTES } from './validation';
@@ -126,6 +127,18 @@ export class Room extends DurableObject<Env> {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
         this.commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'shape', shape: msg.shape,
           x: msg.x, y: msg.y, rot: 0, opacity: 1, visible: true, locked: false, ...shapeDefaults[msg.shape] } }, msg.requestId);
+      } else if (msg.t === 'timer.add') {
+        if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
+        this.commit({ t: 'item.upsert', item: { id: crypto.randomUUID(), type: 'timer', kind: msg.kind,
+          name: msg.kind === 'countdown' ? 'Cuenta regresiva' : 'Cronómetro', x: msg.x, y: msg.y, w: 640, h: 140, rot: 0,
+          opacity: 1, visible: true, locked: false, ...defaultTextStyle, fontFamily: 'JetBrains Mono', fontSize: 96, align: 'center',
+          durationMs: msg.kind === 'countdown' ? 300000 : 0, elapsedMs: 0, running: false, startedAt: null } }, msg.requestId);
+      } else if (msg.t === 'timer.control' || msg.t === 'timer.set') {
+        const item = state.items.find(i => i.id === msg.id);
+        if (!item || item.type !== 'timer') throw new HttpError(400, 'Selecciona un temporizador.');
+        if (msg.t === 'timer.set' && item.kind !== 'countdown') throw new HttpError(400, 'La duración solo se configura en una cuenta regresiva.');
+        this.commit({ t: 'item.upsert', item: msg.t === 'timer.control' ? controlTimer(item, msg.action, Date.now())
+          : { ...item, durationMs: msg.durationMs, elapsedMs: 0, running: false, startedAt: null } }, msg.requestId);
       } else if (msg.t === 'item.add') {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
         const media = state.media.find(m => m.id === msg.mediaId);
@@ -158,8 +171,9 @@ export class Room extends DurableObject<Env> {
           if (item.locked && Object.keys(msg.patch).some(k => ['x', 'y', 'w', 'h', 'rot'].includes(k))) throw new HttpError(409, 'Desbloquea el elemento antes de moverlo.');
           if (msg.t === 'item.preview') this.broadcast({ t: 'preview', id: item.id, patch: msg.patch }, ws);
           else {
-            const textFields = ['text', ...Object.keys(defaultTextStyle)];
-            if (Object.keys(msg.patch).some(k => (textFields.includes(k) && item.type !== 'text')
+            const textFields = Object.keys(defaultTextStyle);
+            if (Object.keys(msg.patch).some(k => (textFields.includes(k) && item.type !== 'text' && item.type !== 'timer')
+              || (k === 'text' && item.type !== 'text')
               || (['loop', 'muted', 'volume'].includes(k) && item.type !== 'video')
               || (['fill', 'borderColor', 'borderWidth'].includes(k) && item.type !== 'shape')
               || (k === 'fill' && item.type === 'shape' && ['line', 'arrow'].includes(item.shape))

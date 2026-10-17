@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { shapeKinds } from '../shared/model';
+import { MAX_TIMER_DURATION } from '../shared/timers';
 
 const coordinate = z.number().finite().min(-100_000).max(100_000);
 const id = z.string().uuid();
@@ -28,6 +29,9 @@ export const clientMessage = z.discriminatedUnion('t', [
   z.object({ t: z.literal('item.add'), mediaId: id, x: coordinate, y: coordinate, requestId }).strict(),
   z.object({ t: z.literal('text.add'), x: coordinate, y: coordinate, requestId }).strict(),
   z.object({ t: z.literal('shape.add'), shape: z.enum(shapeKinds), x: coordinate, y: coordinate, requestId }).strict(),
+  z.object({ t: z.literal('timer.add'), kind: z.enum(['countdown', 'stopwatch']), x: coordinate, y: coordinate, requestId }).strict(),
+  z.object({ t: z.literal('timer.control'), id, action: z.enum(['start', 'pause', 'reset']), requestId }).strict(),
+  z.object({ t: z.literal('timer.set'), id, durationMs: z.number().int().min(1000).max(MAX_TIMER_DURATION).multipleOf(1000), requestId }).strict(),
   z.object({ t: z.literal('video.control'), id, action: z.enum(['play', 'pause', 'restart']), requestId }).strict(),
   z.object({ t: z.literal('item.patch'), id, patch: itemPatch, requestId }).strict(),
   z.object({ t: z.literal('item.preview'), id, patch: previewPatch }).strict(),

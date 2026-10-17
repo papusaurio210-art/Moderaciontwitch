@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { ArrowRight, Circle, Film, Image as ImageIcon, Minus, Radio, Square, Triangle, Type } from 'lucide-react';
+import { ArrowRight, Circle, Film, Hourglass, Image as ImageIcon, Minus, Radio, Square, Timer, Triangle, Type } from 'lucide-react';
 import { mediaUrl, videoPosition, type BaseItem, type Item, type MediaFile, type VideoItem } from '../shared/model';
 import { ShapeContent } from './ShapeContent';
+import { TextContent } from './TextContent';
+import { TimerContent } from './TimerContent';
 
 export function ItemIcon({ item, size = 14 }: { item: Item; size?: number }) {
   const Icon = item.type === 'shape' ? { rect: Square, ellipse: Circle, line: Minus, arrow: ArrowRight }[item.shape]
+    : item.type === 'timer' ? item.kind === 'countdown' ? Hourglass : Timer
     : item.type === 'text' ? Type : item.type === 'video' ? Film : ImageIcon;
   return <Icon size={size} />;
 }
@@ -50,11 +53,8 @@ export function ItemContent({ roomId, item, media, editor = false, active = true
   roomId: string; item: Item; media?: MediaFile; editor?: boolean; active?: boolean; serverOffset?: number;
 }) {
   if (item.type === 'shape') return <ShapeContent item={item} />;
-  if (item.type === 'text') return <div className="item-text" style={{ fontFamily: item.fontFamily, fontSize: item.fontSize,
-    fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? 'italic' : 'normal', color: item.color,
-    textAlign: item.align, WebkitTextStroke: `${item.strokeWidth}px ${item.strokeColor}`, paintOrder: 'stroke fill',
-    textShadow: item.shadow ? '0 3px 7px #000a' : 'none', background: item.background ?? 'transparent', padding: item.strokeWidth,
-  }}>{item.text}</div>;
+  if (item.type === 'text') return <TextContent item={item}>{item.text}</TextContent>;
+  if (item.type === 'timer') return <TimerContent item={item} serverOffset={serverOffset} />;
   if (item.type === 'video' && media) return <VideoContent src={mediaUrl(roomId, media.id)} item={item} editor={editor} active={active} serverOffset={serverOffset} />;
   return media ? <img src={mediaUrl(roomId, media.id)} alt={item.name} draggable={false} className="item-image" style={{ objectFit: item.fit ?? 'contain' }} />
     : <div className="missing-image"><ImageIcon size={24} /><span>Archivo no disponible</span></div>;

@@ -16,6 +16,11 @@ export interface TextStyle {
   strokeColor: string; strokeWidth: number; shadow: boolean; background: string | null;
 }
 export interface TextItem extends BaseItem, TextStyle { type: 'text'; text: string }
+export type TimerKind = 'countdown' | 'stopwatch';
+export type TimerAction = 'start' | 'pause' | 'reset';
+export interface TimerItem extends BaseItem, TextStyle {
+  type: 'timer'; kind: TimerKind; durationMs: number; elapsedMs: number; running: boolean; startedAt: number | null;
+}
 export const shapeKinds = ['rect', 'ellipse', 'line', 'arrow'] as const;
 export type ShapeKind = typeof shapeKinds[number];
 export interface ShapeStyle { fill: string | null; borderColor: string; borderWidth: number }
@@ -26,7 +31,7 @@ export const shapeDefaults: Record<ShapeKind, ShapeStyle & { name: string; w: nu
   line: { name: 'Línea', w: 360, h: 32, fill: null, borderColor: '#ffffff', borderWidth: 6 },
   arrow: { name: 'Flecha', w: 360, h: 80, fill: null, borderColor: '#ffffff', borderWidth: 8 },
 };
-export type Item = ImageItem | VideoItem | TextItem | ShapeItem;
+export type Item = ImageItem | VideoItem | TextItem | ShapeItem | TimerItem;
 export type ItemPatch = Partial<Omit<BaseItem, 'id'> & TextStyle & ShapeStyle & { text: string; fit: Fit; loop: boolean; muted: boolean; volume: number }>;
 export const defaultTextStyle: TextStyle = {
   fontFamily: 'Inter', fontSize: 64, color: '#ffffff', bold: true, italic: false, align: 'left',
@@ -45,6 +50,9 @@ export type EditCommand =
   | { t: 'item.add'; mediaId: string; x: number; y: number }
   | { t: 'text.add'; x: number; y: number }
   | { t: 'shape.add'; shape: ShapeKind; x: number; y: number }
+  | { t: 'timer.add'; kind: TimerKind; x: number; y: number }
+  | { t: 'timer.control'; id: string; action: TimerAction }
+  | { t: 'timer.set'; id: string; durationMs: number }
   | { t: 'video.control'; id: string; action: 'play' | 'pause' | 'restart' }
   | { t: 'item.patch'; id: string; patch: ItemPatch }
   | { t: 'item.remove'; id: string }

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Grid2X2, Hand,
   Image as ImageIcon, ImagePlus, Keyboard, Layers, Link, LoaderCircle, LockKeyhole, Maximize, Minus,
-  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight } from 'lucide-react';
-import { clamp, shapeDefaults, type ItemPatch, type ShapeKind } from '../shared/model';
+  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer } from 'lucide-react';
+import { clamp, shapeDefaults, type ItemPatch, type ShapeKind, type TimerKind } from '../shared/model';
 import { viewerKeyFromEditor } from '../shared/keys';
 import { Brand, ConnectionBadge, ViewerCount, MediaThumbnail, ItemIcon } from './components';
 import { Canvas, type View } from './Canvas';
 import type { RoomConnection } from './useRoom';
 import { NumberField, NameField, TextProperties, VideoProperties, ShapeProperties } from './Properties';
+import { TimerProperties } from './TimerProperties';
 import { inspectFile } from './media';
 
 function Tool({ label, active, onClick, children, disabled }: { label: string; active?: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
@@ -89,6 +90,10 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
     [ids[from], ids[to]] = [ids[to], ids[from]];
     room.send({ t: 'item.reorder', ids });
   }
+  function addTimer(kind: TimerKind) {
+    setHand(false);
+    room.send({ t: 'timer.add', kind, x: state.stage.x + (state.stage.w - 640) / 2, y: state.stage.y + (state.stage.h - 140) / 2 });
+  }
   function addShape(shape: ShapeKind) {
     const size = shapeDefaults[shape];
     setHand(false);
@@ -113,6 +118,9 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
         <Tool label="Añadir círculo" onClick={() => addShape('ellipse')} disabled={!enabled}><Circle size={20} /></Tool>
         <Tool label="Añadir línea" onClick={() => addShape('line')} disabled={!enabled}><Minus size={20} /></Tool>
         <Tool label="Añadir flecha" onClick={() => addShape('arrow')} disabled={!enabled}><ArrowRight size={20} /></Tool>
+        <span className="rail-divider" />
+        <Tool label="Añadir cuenta regresiva" onClick={() => addTimer('countdown')} disabled={!enabled}><Hourglass size={20} /></Tool>
+        <Tool label="Añadir cronómetro" onClick={() => addTimer('stopwatch')} disabled={!enabled}><Timer size={20} /></Tool>
         <div className="rail-bottom"><Tool label="Atajos de teclado" onClick={() => setHelp(true)}><Keyboard size={19} /></Tool></div>
       </nav>
       <aside className="library-panel"><div className="sidebar-tabs" role="tablist" aria-label="Contenido del estudio">
@@ -155,11 +163,12 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
       </main>
       <aside className="properties-panel"><div className="properties-heading"><span><span className="purple-dot" />PROPIEDADES</span><Settings2 size={15} /></div>
         {selected ? <fieldset className="properties-content" disabled={!enabled}>
-          <div className="selected-type"><span><ItemIcon item={selected} />{selected.type === 'shape' ? shapeDefaults[selected.shape].name : { image: 'Imagen', gif: 'GIF animado', video: 'Vídeo', text: 'Texto' }[selected.type]}</span><div><Tool label={selected.visible ? 'Ocultar elemento' : 'Mostrar elemento'} onClick={() => save({ visible: !selected.visible })}>{selected.visible ? <Eye size={15} /> : <EyeOff size={15} />}</Tool>
+          <div className="selected-type"><span><ItemIcon item={selected} />{selected.type === 'shape' ? shapeDefaults[selected.shape].name : selected.type === 'timer' ? selected.kind === 'countdown' ? 'Cuenta regresiva' : 'Cronómetro' : { image: 'Imagen', gif: 'GIF animado', video: 'Vídeo', text: 'Texto' }[selected.type]}</span><div><Tool label={selected.visible ? 'Ocultar elemento' : 'Mostrar elemento'} onClick={() => save({ visible: !selected.visible })}>{selected.visible ? <Eye size={15} /> : <EyeOff size={15} />}</Tool>
             <Tool label={selected.locked ? 'Desbloquear elemento' : 'Bloquear elemento'} active={selected.locked} onClick={() => save({ locked: !selected.locked })}>{selected.locked ? <LockKeyhole size={14} /> : <UnlockKeyhole size={14} />}</Tool></div></div>
           <NameField key={`name:${selected.id}`} item={selected} save={save} />
           {selected.type === 'shape' && <ShapeProperties key={`shape:${selected.id}`} item={selected} save={save} />}
-          {selected.type === 'text' && <TextProperties key={`text:${selected.id}`} item={selected} save={save} />}
+          {selected.type === 'timer' && <TimerProperties key={`timer:${selected.id}`} item={selected} send={room.send} serverOffset={room.serverOffset} />}
+          {(selected.type === 'text' || selected.type === 'timer') && <TextProperties key={`text:${selected.id}`} item={selected} save={save} />}
           {selected.type === 'video' && <VideoProperties item={selected} save={save} send={room.send} duration={media?.duration} serverOffset={room.serverOffset} pending={room.pending} />}
           {'mediaId' in selected && <label className="property-label media-fit">AJUSTE<select aria-label="Ajuste del archivo" value={selected.fit ?? 'contain'} onChange={e => save({ fit: e.target.value as 'contain' | 'cover' | 'fill' })}><option value="contain">Contener</option><option value="cover">Cubrir</option><option value="fill">Estirar</option></select></label>}
           <section className="property-section"><h3>Transformación<span>PX</span></h3><div className="number-grid">

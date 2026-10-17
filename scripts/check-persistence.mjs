@@ -93,13 +93,25 @@ try {
       ...(shape === 'rect' || shape === 'ellipse' ? { fill: null } : {}),
     } });
   }
-  const before = await socket(page, room); assert.equal(before.rev, 18);
+  for (const kind of ['countdown', 'stopwatch']) {
+    const added = await socket(page, room, { t: 'timer.add', kind, x: 100, y: kind === 'countdown' ? 700 : 850 });
+    await socket(page, room, { t: 'timer.control', id: added.op.item.id, action: 'start' });
+    if (kind === 'countdown') await socket(page, room, { t: 'timer.control', id: added.op.item.id, action: 'pause' });
+  }
+  const before = await socket(page, room); assert.equal(before.rev, 23);
   assert.equal(before.items.filter(item => item.type === 'shape').length, 4);
   assert.equal(before.items.find(item => item.type === 'video').playing, false);
   assert.equal(before.items.find(item => item.type === 'video').volume, .35);
   await page.close(); await stop(); await start();
   const restoredPage = await browser.newPage(); await restoredPage.goto(origin);
   assert.deepEqual(await socket(restoredPage, room), before, 'La sala debe conservarse tras reiniciar el proceso.');
+  await restoredPage.goto(`${origin}/overlay/${room.roomId}?k=${room.viewerKey}`);
+  const stopwatch = before.items.find(item => item.type === 'timer' && item.kind === 'stopwatch');
+  const display = restoredPage.locator(`[data-item-id="${stopwatch.id}"] .item-timer`);
+  await display.waitFor();
+  const displayedSeconds = (await display.textContent()).split(':').reduce((value, part) => value * 60 + Number(part), 0);
+  const elapsedSeconds = Math.floor((Date.now() - stopwatch.startedAt) / 1000);
+  assert.ok(elapsedSeconds >= 1 && Math.abs(displayedSeconds - elapsedSeconds) <= 1, 'El cronómetro debe contar también el tiempo del reinicio.');
   const restoredImage = await fetch(`${origin}/media/${room.roomId}/${media.id}`);
   assert.equal(restoredImage.status, 200);
   assert.deepEqual(Buffer.from(await restoredImage.arrayBuffer()), image, 'R2 debe conservar los bytes originales.');
@@ -114,7 +126,7 @@ try {
     const body = await (await fetch(origin + path)).text();
     assert.ok(!body.includes(admin) && !body.includes('export interface Env'), 'Los archivos privados no deben servirse.');
   }
-  console.log('OK: sala, imágenes, GIF, vídeo con volumen, texto y cuatro figuras con estilos recuperados tras un reinicio real; cabeceras y archivos privados verificados.');
+  console.log('OK: medios, texto, figuras, cuenta pausada y cronómetro activo recuperados tras reiniciar; reloj, cabeceras y archivos privados verificados.');
 } finally {
   await browser?.close(); await stop(); await rm(statePath, { recursive: true, force: true });
 }

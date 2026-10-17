@@ -8,6 +8,7 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Compartir enlaces distintos para editar y visualizar. El visor no puede modificar la sala.
 - Subir PNG, JPG, WebP, GIF animados, MP4 y WebM, reutilizarlos desde la biblioteca y organizarlos por capas.
 - Crear rectángulos, círculos/elipses, líneas y flechas sin subir archivos; ajustar relleno, color y grosor del borde o trazo.
+- Añadir cuenta regresiva y cronómetro sincronizados con el servidor; iniciar, pausar, reiniciar y configurar la duración.
 - Añadir texto editable con fuente, tamaño, color, negrita, cursiva, alineación, contorno, sombra y fondo.
 - Reproducir, pausar y reiniciar vídeos, activar bucle y controlar el sonido del overlay con una barra de volumen de 0 a 100 % por vídeo. El nivel se guarda y se sincroniza entre editores y OBS sin reiniciar la reproducción. Silenciar conserva el nivel elegido; los vídeos anteriores conservan el 100 % hasta ajustarlos. El panel permanece silenciado.
 - Mover, redimensionar, rotar, ocultar, bloquear y ajustar la opacidad de los elementos.
@@ -16,13 +17,21 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Mostrar un overlay transparente de 1920 × 1080, recortado al escenario.
 - Conservar las operaciones confirmadas en SQLite de Durable Objects y los archivos en R2.
 
-La aplicación funciona localmente sin una cuenta de Cloudflare. El usuario ha confirmado el funcionamiento del overlay de imágenes en OBS; los nuevos GIF, vídeos y textos se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. El despliegue público queda pendiente. Todavía no incluye temporizadores, chat de Twitch, historial de deshacer, gestión de usuarios ni revocación de enlaces.
+La aplicación funciona localmente sin una cuenta de Cloudflare. El usuario ha confirmado el funcionamiento del overlay de imágenes en OBS; los GIF, vídeos, textos, figuras y temporizadores se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. El despliegue público queda pendiente. Todavía no incluye chat de Twitch, historial de deshacer, gestión de usuarios ni revocación de enlaces.
 
 ## Figuras
 
 En la barra izquierda puedes añadir **Rectángulo**, **Círculo**, **Línea** y **Flecha**. Al crearlas se seleccionan en el centro del escenario. Usa **Apariencia** para cambiar relleno, color y grosor (0–64 px), y **Transformación** para posición, tamaño y rotación. Con relleno desactivado y borde mayor que cero puedes crear marcos. El círculo se convierte en elipse si cambias su ancho y alto por separado. Líneas y flechas apuntan inicialmente a la derecha; gíralas para orientarlas y modifica su ancho para ajustar la longitud. En figuras pequeñas el grosor se limita al espacio disponible.
 
 Las figuras comparten las capas, opacidad, bloqueo y vista atenuada de los elementos ocultos. No consumen almacenamiento de archivos en la biblioteca. Para colocar un texto sobre un fondo, crea un rectángulo y usa **Atrás** hasta situarlo debajo del texto. No requieren volver a configurar el enlace de OBS. La carga de archivos SVG externos sigue sin estar permitida.
+
+## Temporizadores
+
+Añade **Cuenta regresiva** o **Cronómetro** desde los iconos de reloj de la barra izquierda. La cuenta regresiva comienza pausada en 5 minutos y el cronómetro en cero. Para cambiar una duración, introduce horas, minutos y segundos y pulsa **Aplicar duración** (entre 1 segundo y 24 horas). Aplicar restablece la cuenta y la deja pausada.
+
+**Iniciar** comienza o reanuda; **Pausar** conserva el tiempo exacto; **Reiniciar** vuelve al valor inicial y lo deja pausado. Una cuenta finalizada permanece en cero; Iniciar vuelve a comenzar su duración completa. El cronómetro puede superar las 24 horas. Se muestran minutos y segundos, y horas cuando corresponde; las cuentas configuradas para una hora o más conservan ese formato hasta terminar.
+
+Ambos admiten fuente, tamaño, color, negrita, cursiva, alineación, contorno, sombra y fondo, además de transformaciones, opacidad, capas y bloqueo de posición. Ocultar o sacar un temporizador del escenario **no lo pausa**. Un temporizador activo sigue contando aunque cierres el panel o reinicies el servidor; el tiempo se calcula desde la marca de inicio guardada, sin escribir cada segundo en la base de datos. Al reconectar se recuperan el estado y la referencia del reloj del servidor. No se reproducen alarmas ni se disparan acciones automáticas al finalizar.
 
 ## Desarrollo local
 
