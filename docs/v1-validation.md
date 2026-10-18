@@ -35,7 +35,7 @@ La sincronización superó el umbral de esta prueba: percentil 95 de confirmacio
 Antes de cerrar la v1, falta:
 
 1. Validar en OBS real imágenes, GIF, vídeos con audio, volumen, ocultar/mostrar y temporizadores. Probar el número de vídeos y resoluciones que se utilizarán realmente, observando audio y estadísticas de renderizado de OBS.
-2. Publicar en Cloudflare y repetir la colaboración con streamer y editores en equipos y redes distintos.
+2. Repetir la colaboración con streamer y editores en equipos y redes distintos. El despliegue y la prueba básica en navegador de la instalación pública ya se completaron; véase [la validación de producción](cloudflare-deployment.md).
 3. Ejecutar una sesión prolongada con desconexiones y cambios continuos; un minuto no representa varias horas de directo.
 4. Completar y verificar el procedimiento de respaldo y recuperación del almacenamiento de producción.
 

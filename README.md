@@ -20,7 +20,7 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Mostrar un overlay transparente recortado al escenario; elegir formatos horizontales, verticales, cuadrados o dimensiones personalizadas.
 - Conservar las operaciones confirmadas en SQLite de Durable Objects y los archivos en R2.
 
-La aplicación funciona localmente sin una cuenta de Cloudflare. El usuario ha confirmado el funcionamiento del overlay de imágenes en OBS; los GIF, vídeos, textos, figuras y temporizadores se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. El despliegue público queda pendiente. Todavía no incluye chat de Twitch, gestión de usuarios ni revocación de enlaces.
+La aplicación funciona localmente sin una cuenta de Cloudflare y está publicada en [Overlay Studio](https://stream-overlay-studio.willicer1313.workers.dev). El usuario ha confirmado el funcionamiento del overlay local de imágenes en OBS; los GIF, vídeos, textos, figuras y temporizadores se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. La creación de estudios, R2 y la sincronización pública se comprobaron en navegador; consulta la [guía de producción](docs/cloudflare-deployment.md). Todavía no incluye chat de Twitch, gestión de usuarios ni revocación de enlaces.
 
 ## Mis canales: perfiles locales
 
@@ -175,9 +175,9 @@ Se permiten hasta 500 elementos, 500 archivos, 500 MiB de biblioteca por sala, 2
 
 Los enlaces conceden acceso a quien los tenga. Guarda el enlace de edición y comparte el del visor solo donde sea necesario. El servidor almacena hashes de las claves; no hay todavía cuentas, recuperación administrativa ni rotación de claves. No se registran claves deliberadamente ni se habilita observabilidad del Worker en producción. El cliente usa fuentes locales y una política de referencia `no-referrer`.
 
-## Despliegue posterior en Cloudflare
+## Despliegue en Cloudflare
 
-El proyecto incluye `wrangler.jsonc`, la migración SQLite del Durable Object `Room` y el enlace R2 `MEDIA`. Cuando se disponga de acceso a la cuenta:
+El proyecto incluye `wrangler.jsonc`, la migración SQLite del Durable Object `Room` y el enlace R2 `MEDIA`. La instalación publicada y las comprobaciones realizadas se describen en la [guía de producción](docs/cloudflare-deployment.md). Para una instalación nueva con acceso a la cuenta:
 
 ```sh
 npx wrangler login
@@ -188,4 +188,4 @@ npm run deploy
 
 Usa una clave de administración de producción y verifica los recursos y costes de la cuenta antes del despliegue. `.dev.vars` solo configura el entorno local. La salida de compilación del Worker puede contener una copia local de ese archivo para `preview`; `dist/` está excluido de Git y los archivos públicos están limitados a `dist/client/`.
 
-Tras desplegar falta verificar creación de salas, subida real a R2, reconexión y renderizado en la Fuente de navegador de OBS. Estas instrucciones preparan esa fase; no implican que el servicio ya esté publicado.
+En la instalación publicada ya se verificaron creación de salas, subida real a R2 y reconexión. Queda comprobarla en la Fuente de navegador de OBS, con streamer y moderador en equipos distintos, y durante varias horas. Para actualizar la instalación existente no vuelvas a crear el bucket: utiliza `npm run deploy` y conserva los nombres de recursos y las migraciones.
