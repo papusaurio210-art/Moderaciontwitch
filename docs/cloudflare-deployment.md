@@ -32,7 +32,7 @@ Los estudios y archivos locales no se migran automáticamente a producción. La 
 
 `ADMIN_SECRET` permite crear estudios; no es el token de Cloudflare ni una clave que deba recibir el streamer. Se generó una clave independiente para producción. La copia para el propietario se conserva en `.wrangler/production-admin-secret.txt` del entorno que hizo el despliegue, con permisos 0600 y excluida de Git. Guárdala en un gestor de contraseñas; no dependas de la conservación de ese archivo en futuros entornos.
 
-Para futuros despliegues se necesitan `CLOUDFLARE_API_TOKEN` y el identificador real de cuenta en `CLOUDFLARE_ACCOUNT_ID`, suministrados desde la configuración segura del entorno. El identificador tiene 32 caracteres hexadecimales. En este despliegue el valor recibido no tenía ese formato: se consultó `/accounts`, se encontró una única cuenta autorizada y se utilizó su identificador para los comandos. No se debe elegir automáticamente una cuenta si aparecen varias.
+Para despliegues manuales desde Codex se necesitan `CLOUDFLARE_API_TOKEN` y el identificador real de cuenta en `CLOUDFLARE_ACCOUNT_ID`, suministrados desde la configuración segura del entorno. El identificador tiene 32 caracteres hexadecimales. En el despliegue inicial el valor recibido no tenía ese formato: se consultó `/accounts`, se encontró una única cuenta autorizada y se utilizó su identificador para los comandos. No se debe elegir automáticamente una cuenta si aparecen varias. La conexión de Workers Builds descrita abajo permite publicar sin suministrar estas credenciales a Codex.
 
 Cambiar `ADMIN_SECRET` cambia la clave de creación, pero no revoca los enlaces de estudios existentes. No se ha implementado todavía la revocación de esos enlaces.
 
@@ -54,7 +54,28 @@ El navegador de pruebas necesitó acceso a su almacén de certificados para conf
 
 ## Actualizar y comprobar
 
-Con las credenciales correctas disponibles, ejecuta `npm run deploy` desde la raíz; en PowerShell, `npm.cmd run deploy`. Conserva el bucket, la clase del Durable Object y el historial de migraciones para mantener los datos.
+### Publicación automática desde GitHub
+
+El Worker existente está conectado a `papusaurio210-art/Moderaciontwitch` mediante Workers Builds con esta configuración:
+
+| Campo | Valor |
+|---|---|
+| Rama de producción | `main` |
+| Directorio raíz | `/` |
+| Build command | `npm run build` |
+| Deploy command | `node scripts/wrangler.mjs deploy` |
+| Disable builds | Desactivado |
+| Enable Preview builds | Desactivado |
+
+Un nuevo commit enviado a `main` inicia la compilación y el despliegue en Cloudflare. La conexión por sí sola no prueba que el despliegue haya terminado: comprueba en Builds que la ejecución correspondiente al commit esté aprobada y que incluya el despliegue correcto.
+
+Antes de retirar el acceso de Codex, verifica una ejecución completa y que las credenciales de Builds sean independientes del token que se va a revocar. Después elimina `CLOUDFLARE_API_TOKEN` de la configuración del entorno de Codex y revoca ese token en Cloudflare. El identificador `CLOUDFLARE_ACCOUNT_ID` también puede retirarse de Codex si ya no se administra la cuenta desde allí. Conserva la integración con GitHub, las credenciales de Builds y el secreto `ADMIN_SECRET` del Worker.
+
+Con este flujo, cualquier cambio enviado a `main` puede publicarse automáticamente: valida el código antes de subirlo. Los recursos, bindings y migraciones siguen formando parte de la configuración del proyecto; Builds no sustituye el diseño de la base de datos ni la preparación de sus migraciones.
+
+### Despliegue manual y verificación
+
+Como alternativa manual, con las credenciales correctas disponibles ejecuta `npm run deploy` desde la raíz; en PowerShell, `npm.cmd run deploy`. Conserva el bucket, la clase del Durable Object y el historial de migraciones para mantener los datos. No hace falta ejecutar este comando desde Codex cuando Workers Builds ya está publicando el mismo commit.
 
 Después comprueba `/api/health`, abre un estudio existente, verifica sus archivos y prueba una edición con el visor abierto. Los despliegues de código no son copias de seguridad de las salas y de R2.
 
