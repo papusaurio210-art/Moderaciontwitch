@@ -153,6 +153,18 @@ npm run preview
 
 `preview` usa Wrangler con los recursos compilados. Las pruebas usan este mismo recorrido: en la versión instalada del intermediario WebSocket de Vite, el cierre visible en el navegador de una conexión que nunca envía `hello` se retrasa; Wrangler sí completa el cierre dentro del plazo de la prueba. El servidor rechaza la autenticación tardía en ambos casos.
 
+## Pruebas de carga y estabilidad
+
+Ejecuta `npm run test:load` para compilar y lanzar las pruebas de carga por separado de las pruebas funcionales habituales. Requieren Node.js 24 recomendado y Chromium, igual que las pruebas de navegador; el vídeo sintético está incluido y no requiere instalar FFmpeg. Usan el puerto 8790 y el almacenamiento aislado `.wrangler/load-state`.
+
+La suite comprueba un escenario de 100 elementos (40 figuras, 30 textos, 20 imágenes, seis vídeos H.264 de 720p/30 fps y cuatro cronómetros), tres editores y un visor. Observa un minuto de reproducción y envía 60 cambios concurrentes desde los paneles reales. Compara el estado recibido con lo renderizado, desconecta un editor y recarga el visor. Además comprueba 500 figuras: rechazo del elemento 501, mover/eliminar/deshacer/rehacer grupos y aislamiento de una conexión que excede el límite de mensajes.
+
+Las mediciones se imprimen al terminar cada escenario y quedan en archivos `metrics.json` dentro de `test-results/load/`. Incluyen confirmación de operaciones, tiempo de una ronda de edición, recuperación, intervalos de animación y fotogramas de vídeo. El percentil 95 de confirmación debe quedar por debajo de 2500 ms en esta prueba; también deben coincidir los estados y continuar la reproducción de todos los vídeos.
+
+Estas mediciones corresponden a Chromium y Wrangler locales, con los clientes ejecutándose en la misma máquina. Los intervalos de animación y fotogramas descartados se registran como diagnóstico, no como garantía de FPS. El límite de 500 elementos no implica capacidad para 500 vídeos. Quedan por comprobar el rendimiento en OBS, la red entre equipos, los recursos reales de Cloudflare y sesiones prolongadas.
+
+El [informe de validación local](docs/v1-validation.md) recoge las mediciones observadas, sus límites y las comprobaciones pendientes en OBS y producción.
+
 ## Arquitectura y límites
 
 `src/client/` contiene el panel, el lienzo, el visor y la conexión WebSocket. `src/shared/` define los mensajes, el modelo compartido y la línea temporal de vídeo. `src/worker/` valida accesos, sube archivos a R2 y mantiene una instancia de `Room` por sala.

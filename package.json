@@ -16,7 +16,8 @@
     "test:e2e": "npm run build && playwright test",
     "test:persistence": "npm run build && node scripts/check-persistence.mjs",
     "check": "npm run typecheck && npm test && npm run test:e2e",
-    "deploy": "npm run build && node scripts/wrangler.mjs deploy"
+    "deploy": "npm run build && node scripts/wrangler.mjs deploy",
+    "test:load": "npm run build && playwright test --config playwright.load.config.ts"
   },
   "dependencies": {
     "@fontsource/inter": "5.3.0",
