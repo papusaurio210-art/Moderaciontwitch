@@ -47,6 +47,8 @@ export interface RoomState {
 }
 export type Role = 'editor' | 'viewer';
 export type EditCommand =
+  | { t: 'media.rename'; id: string; name: string }
+  | { t: 'media.remove'; id: string }
   | { t: 'stage.resize'; w: number; h: number }
   | { t: 'clipboard.copy'; ids: string[] }
   | { t: 'clipboard.paste' }
@@ -65,6 +67,8 @@ export type EditCommand =
   | { t: 'item.remove'; id: string }
   | { t: 'item.reorder'; ids: string[] };
 export type Operation =
+  | { t: 'media.rename'; id: string; name: string }
+  | { t: 'media.remove'; id: string }
   | { t: 'stage.set'; stage: Stage }
   | { t: 'items.change'; upserts: Item[]; removed: string[]; order?: string[] }
   | { t: 'item.upsert'; item: Item }
@@ -83,6 +87,8 @@ export type ServerMessage =
 
 export function applyOperation(state: RoomState, op: Operation, rev: number): RoomState {
   switch (op.t) {
+    case 'media.rename': return { ...state, rev, media: state.media.map(m => m.id === op.id ? { ...m, name: op.name } : m) };
+    case 'media.remove': return { ...state, rev, media: state.media.filter(m => m.id !== op.id) };
     case 'stage.set': return { ...state, rev, stage: op.stage };
     case 'items.change': {
       const updates = new Map(op.upserts.map(i => [i.id, i]));

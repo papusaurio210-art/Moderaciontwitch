@@ -7,6 +7,7 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Crear salas protegidas con una clave de administración.
 - Compartir enlaces distintos para editar y visualizar. El visor no puede modificar la sala.
 - Subir PNG, JPG, WebP, GIF animados, MP4 y WebM, reutilizarlos desde la biblioteca y organizarlos por capas.
+- Buscar y filtrar la biblioteca por tipo y uso, renombrar archivos y eliminar los que no estén en el escenario con confirmación.
 - Crear rectángulos, círculos/elipses, líneas y flechas sin subir archivos; ajustar relleno, color y grosor del borde o trazo.
 - Añadir cuenta regresiva y cronómetro sincronizados con el servidor; iniciar, pausar, reiniciar y configurar la duración.
 - Añadir texto editable con fuente, tamaño, color, negrita, cursiva, alineación, contorno, sombra y fondo.
@@ -19,6 +20,14 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Conservar las operaciones confirmadas en SQLite de Durable Objects y los archivos en R2.
 
 La aplicación funciona localmente sin una cuenta de Cloudflare. El usuario ha confirmado el funcionamiento del overlay de imágenes en OBS; los GIF, vídeos, textos, figuras y temporizadores se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. El despliegue público queda pendiente. Todavía no incluye chat de Twitch, gestión de usuarios ni revocación de enlaces.
+
+## Biblioteca de archivos
+
+Combina la búsqueda por nombre con los filtros **Tipo** (imágenes, GIF o vídeos) y **Uso** (en uso o sin uso). Los filtros se conservan al alternar entre Biblioteca y Capas durante la sesión. **Limpiar filtros** permite recuperar la lista completa si no hay resultados. Cada archivo muestra cuántos elementos lo utilizan, incluidos los ocultos.
+
+El lápiz permite **renombrar el archivo** en la biblioteca; los nombres de las capas existentes se conservan. La papelera muestra una confirmación con el nombre y tamaño. Solo puedes **eliminar definitivamente** archivos que no utilice ningún elemento del escenario: primero elimina sus capas, incluidas las ocultas. Quitar una capa por sí solo conserva su archivo para reutilizarlo.
+
+Los cambios se sincronizan entre editores. El servidor vuelve a comprobar el uso al eliminar, por si alguien añadió el archivo mientras estaba abierta la confirmación. Eliminar libera espacio de la biblioteca y no se puede deshacer. El portapapeles y el historial rechazan restauraciones que necesiten un archivo eliminado; el historial afectado se reinicia con un aviso. Renombrar y eliminar archivos no crean pasos del historial del escenario.
 
 ## Figuras
 
@@ -44,7 +53,7 @@ En Propiedades encontrarás seis opciones de **alineación**. Un elemento se ali
 
 Los botones **Deshacer / Rehacer**, **Ctrl/⌘ + Z**, **Ctrl/⌘ + Shift + Z** o **Ctrl + Y** recorren hasta 30 cambios recientes de tu sesión (con un límite de tamaño). Mover, alinear, duplicar o eliminar un grupo cuenta como un solo cambio. Una nueva edición descarta la rama de rehacer. Los campos de texto mantienen sus atajos nativos mientras escribes.
 
-El historial se conserva durante la hibernación del servidor y se reinicia al recargar o reconectar el panel; los elementos guardados permanecen. No deshace cargas de archivos. Los controles de reproducción y temporizadores también se guardan: al restaurarlos se recuperan sus marcas de tiempo originales, por lo que un reloj activo refleja el tiempo transcurrido. Si otro editor cambió los elementos afectados o el orden necesario para restaurarlos, se rechaza la operación y se reinicia el historial con un aviso; los cambios en elementos ajenos se conservan.
+El historial se conserva durante la hibernación del servidor y se reinicia al recargar o reconectar el panel; los elementos guardados permanecen. No deshace cargas, cambios de nombre ni eliminaciones de archivos de la biblioteca. Los controles de reproducción y temporizadores también se guardan: al restaurarlos se recuperan sus marcas de tiempo originales, por lo que un reloj activo refleja el tiempo transcurrido. Si otro editor cambió los elementos afectados o el orden necesario para restaurarlos, se rechaza la operación y se reinicia el historial con un aviso; los cambios en elementos ajenos se conservan.
 
 ## Ajuste magnético, copiar/pegar y formatos
 
@@ -120,7 +129,7 @@ npm run test:persistence
 
 Si no tienes Chromium del sistema, ejecuta `npx playwright install chromium`. También puedes indicar su ruta con `CHROMIUM_PATH`. Las pruebas de navegador compilan y arrancan su propio servicio con Wrangler en el puerto 8790 y utilizan almacenamiento separado del desarrollo. Las capturas quedan en `test-results/`.
 
-La prueba de persistencia compila el proyecto, arranca un servidor aislado en el puerto 8791, crea una sala con imagen, GIF, vídeo pausado y texto, detiene el proceso y lo reinicia. Comprueba que la revisión, los elementos y los bytes de R2 sobrevivan; verifica también las cabeceras de los recursos y que los archivos privados no se publiquen. Elimina únicamente el almacenamiento temporal que ella misma creó.
+La prueba de persistencia compila el proyecto, arranca un servidor aislado en el puerto 8791, crea una sala con imagen renombrada, GIF, vídeo pausado, texto, figuras y temporizadores, elimina un archivo sin uso, detiene el proceso y lo reinicia. Comprueba que la revisión, el escenario, los elementos y los bytes de R2 sobrevivan, y que el archivo eliminado no reaparezca; verifica también las cabeceras de los recursos y que los archivos privados no se publiquen. Elimina únicamente el almacenamiento temporal que ella misma creó.
 
 Para compilar y ejecutar la versión de producción local, detén el servidor de desarrollo y ejecuta:
 
@@ -137,7 +146,7 @@ npm run preview
 
 Cada operación confirmada obtiene una revisión consecutiva y se guarda antes de notificarse. El movimiento durante un arrastre se transmite como previsualización temporal; al soltar se guarda el resultado. Si el editor abandona el arrastre, la previsualización caduca y el visor recupera la última posición confirmada. Ante un salto de revisión o una reconexión se solicita el estado completo. Si dos editores modifican el mismo campo, prevalece la última operación recibida por la sala.
 
-Se permiten hasta 500 elementos, 500 archivos, 500 MiB de biblioteca por sala, 25 MiB por imagen/GIF, 50 MiB por vídeo y 16384 píxeles por lado. Las subidas comprueban firmas PNG/JPEG/WebP/GIF/MP4/WebM; el navegador comprueba que pueda decodificar el archivo. El servidor no vuelve a decodificar ni convertir medios: dimensiones y duración declaradas se validan por rango. Los archivos se transmiten a R2 por streaming y se sirven mediante rutas aleatorias con caché pública y soporte HTTP Range: están destinados a gráficos del directo. Quitar un elemento del escenario conserva su archivo en la biblioteca; la eliminación de archivos queda pendiente.
+Se permiten hasta 500 elementos, 500 archivos, 500 MiB de biblioteca por sala, 25 MiB por imagen/GIF, 50 MiB por vídeo y 16384 píxeles por lado. Las subidas comprueban firmas PNG/JPEG/WebP/GIF/MP4/WebM; el navegador comprueba que pueda decodificar el archivo. El servidor no vuelve a decodificar ni convertir medios: dimensiones y duración declaradas se validan por rango. Los archivos se transmiten a R2 por streaming y se sirven mediante rutas aleatorias con caché pública y soporte HTTP Range: están destinados a gráficos del directo. Quitar un elemento del escenario conserva su archivo en la biblioteca. Eliminar un archivo sin uso actualiza el catálogo y registra su borrado en una misma transacción SQLite; la limpieza de R2 se ejecuta en segundo plano, con reintentos persistentes mediante alarmas si falla.
 
 Los enlaces conceden acceso a quien los tenga. Guarda el enlace de edición y comparte el del visor solo donde sea necesario. El servidor almacena hashes de las claves; no hay todavía cuentas, recuperación administrativa ni rotación de claves. No se registran claves deliberadamente ni se habilita observabilidad del Worker en producción. El cliente usa fuentes locales y una política de referencia `no-referrer`.
 

@@ -44,6 +44,7 @@ export function historyOperation(state: RoomState, entry: HistoryEntry, directio
     return { t: 'stage.set', stage: direction === 'undo' ? entry.stageBefore : entry.stageAfter };
   }
   const expected = direction === 'undo' ? entry.after : entry.before, restore = direction === 'undo' ? entry.before : entry.after;
+  if (restore.some(i => 'mediaId' in i && !state.media.some(m => m.id === i.mediaId))) return null;
   const expectedOrder = direction === 'undo' ? entry.orderAfter : entry.orderBefore, order = direction === 'undo' ? entry.orderBefore : entry.orderAfter;
   const ids = new Set([...expected, ...restore].map(i => i.id));
   // Never overwrite another editor's changes. Unrelated property edits remain intact.

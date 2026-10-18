@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Grid2X2, Hand,
   Image as ImageIcon, ImagePlus, Keyboard, Layers, Link, LoaderCircle, LockKeyhole, Maximize, Minus,
-  MousePointer2, PanelRight, Plus, Search, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer, Undo2, Redo2, Magnet, ClipboardPaste } from 'lucide-react';
+  MousePointer2, PanelRight, Plus, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer, Undo2, Redo2, Magnet, ClipboardPaste } from 'lucide-react';
 import { clamp, shapeDefaults, type ItemPatch, type ShapeKind, type TimerKind } from '../shared/model';
 import { viewerKeyFromEditor } from '../shared/keys';
-import { Brand, ConnectionBadge, ViewerCount, MediaThumbnail, ItemIcon } from './components';
+import { Brand, ConnectionBadge, ViewerCount, ItemIcon } from './components';
 import { Canvas, type View } from './Canvas';
 import type { RoomConnection } from './useRoom';
 import { NumberField, NameField, TextProperties, VideoProperties, ShapeProperties } from './Properties';
 import { TimerProperties } from './TimerProperties';
 import { StageSettings } from './StageSettings';
 import { SelectionTools } from './SelectionTools';
+import { Library } from './Library';
 import { inspectFile } from './media';
 
 function Tool({ label, active, onClick, children, disabled }: { label: string; active?: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
@@ -25,7 +26,6 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   const selectedItems = room.rendered.filter(i => selectedIds.includes(i.id));
   const select = (id: string, toggle = false) => setSelection(current => toggle ? current.includes(id) ? current.filter(i => i !== id) : [...current, id] : [id]);
   const [tab, setTab] = useState<'library' | 'layers'>('library');
-  const [search, setSearch] = useState('');
   const [snap, setSnap] = useState(true);
   const [stageSettings, setStageSettings] = useState(false);
   const [grid, setGrid] = useState(true);
@@ -51,7 +51,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 3200); return () => clearTimeout(timer); }, [notice]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (/INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName) || help || links || stageSettings) return;
+      if ((event.target as HTMLElement).closest('[role=dialog]') || /INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName) || help || links || stageSettings) return;
       if ((event.ctrlKey || event.metaKey) && event.key === '0') { event.preventDefault(); setFitSignal(n => n + 1); }
       if (event.key === 'Escape') setSelection([]);
       if (!enabled) return;
@@ -147,22 +147,8 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
         <button role="tab" aria-selected={tab === 'library'} className={tab === 'library' ? 'selected' : ''} onClick={() => setTab('library')}><ImageIcon size={15} />Biblioteca</button>
         <button role="tab" aria-selected={tab === 'layers'} className={tab === 'layers' ? 'selected' : ''} onClick={() => setTab('layers')}><Layers size={15} />Capas<span className="count">{state.items.length}</span></button>
       </div>
-        {tab === 'library' ? <>
-          <div className="library-search"><Search size={14} /><input placeholder="Buscar archivos…" aria-label="Buscar archivos" value={search} onChange={e => setSearch(e.target.value)} /><kbd>⌕</kbd></div>
-          <div className="library-subtitle"><span>TUS ARCHIVOS</span><span>{state.media.length} archivos</span></div>
-          <div className="media-list">
-            {!state.media.length ? <div className="empty-library"><span><ImageIcon size={24} strokeWidth={1.2} /></span><strong>Tu biblioteca, a tu manera</strong><p>Sube los gráficos de tu canal.<br />Estarán aquí cuando los necesites.</p></div>
-              : state.media.filter(m => m.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())).map(m => <button key={m.id} className={`media-card ${media?.id === m.id ? 'selected' : ''}`} title={`Añadir ${m.name} al escenario`}
-                draggable={enabled} disabled={!enabled} onDragStart={e => e.dataTransfer.setData('application/overlay-media', m.id)}
-                onClick={() => room.send({ t: 'item.add', mediaId: m.id, x: 120, y: 120 })}>
-                <span className="media-thumb"><MediaThumbnail roomId={state.roomId} media={m} /><span className="mime-chip">{m.mime.split('/')[1].toUpperCase()}</span><span className="add-to-stage"><Plus size={18} /></span></span>
-                <strong>{m.name}</strong><small>{m.width} × {m.height}</small></button>)}
-            {!!state.media.length && !state.media.some(m => m.name.toLocaleLowerCase().includes(search.toLocaleLowerCase())) && <p className="no-results">No hay archivos con ese nombre.</p>}
-          </div>
-          <div className="library-bottom"><div className="storage-line"><span>Almacenamiento</span><span>{(state.media.reduce((n, m) => n + m.size, 0) / 1024 / 1024).toFixed(1)} / 500 MB</span></div><div className="storage-track"><i style={{ width: `${state.media.reduce((n, m) => n + m.size, 0) / (500 * 1024 * 1024) * 100}%` }} /></div>
-            <button className="secondary-button upload-button" onClick={() => fileInput.current?.click()} disabled={!enabled || uploading}>{uploading ? <LoaderCircle size={15} className="spin" /> : <Upload size={15} />}{uploading ? 'Subiendo archivo…' : 'Subir archivos'}</button>
-            <span className="upload-formats">IMÁGENES / GIF: 25 MB · VÍDEO: 50 MB</span></div>
-        </> : <><div className="library-subtitle"><span>ORDEN DEL ESCENARIO</span><span>{state.items.length} elementos</span></div><div className="layers-list">
+        <Library room={room} hidden={tab !== 'library'} selectedMediaId={media?.id} uploading={uploading} chooseFile={() => fileInput.current?.click()} />
+        {tab === 'layers' && <><div className="library-subtitle"><span>ORDEN DEL ESCENARIO</span><span>{state.items.length} elementos</span></div><div className="layers-list">
           {[...state.items].reverse().map(item => <div className={`layer-row ${selectedIds.includes(item.id) ? 'selected' : ''}`} key={item.id}>
             <button className="layer-select" onClick={e => select(item.id, e.shiftKey || e.ctrlKey || e.metaKey)}><ItemIcon item={item} size={15} /><span>{item.name}</span></button>
             <button aria-label={`${item.visible ? 'Ocultar' : 'Mostrar'} ${item.name}`} disabled={!enabled} onClick={() => room.send({ t: 'item.patch', id: item.id, patch: { visible: !item.visible } })}>{item.visible ? <Eye size={13} /> : <EyeOff size={13} />}</button>

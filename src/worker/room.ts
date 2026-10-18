@@ -3,6 +3,7 @@ import type { Env } from './index';
 import type { Item, MediaFile, Operation, Role, RoomState, ServerMessage, VideoItem } from '../shared/model';
 import { applyOperation, defaultTextStyle, shapeDefaults, videoPosition } from '../shared/model';
 import { alignItems, selectionBounds, moveItems, historyEntry, historyOperation, trimHistory, type EditHistory } from '../shared/editing';
+import { mediaUsage } from '../shared/library';
 import { copyItems, pasteItems } from '../shared/clipboard';
 import { controlTimer } from '../shared/timers';
 import { sha256 } from '../shared/keys';
@@ -24,9 +25,11 @@ export class Room extends DurableObject<Env> {
     ctx.storage.sql.exec('DELETE FROM edit_history WHERE updated_at < ?', Date.now() - 86400000);
     ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS clipboard (session TEXT PRIMARY KEY, content TEXT NOT NULL, updated_at INTEGER NOT NULL)');
     ctx.storage.sql.exec('DELETE FROM clipboard WHERE updated_at < ?', Date.now() - 86400000);
+    ctx.storage.sql.exec('CREATE TABLE IF NOT EXISTS media_deletions (id TEXT PRIMARY KEY, attempts INTEGER NOT NULL, next_attempt INTEGER NOT NULL)');
     const row = ctx.storage.sql.exec<{ state: string; editor_hash: string; viewer_hash: string }>('SELECT state, editor_hash, viewer_hash FROM room WHERE id=1').toArray()[0];
     if (row) { this.state = JSON.parse(row.state); this.editorHash = row.editor_hash; this.viewerHash = row.viewer_hash; }
     ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+    ctx.blockConcurrencyWhile(() => this.scheduleAlarm());
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -48,8 +51,7 @@ export class Room extends DurableObject<Env> {
         this.ctx.acceptWebSocket(server);
         const deadline = Date.now() + 5000;
         server.serializeAttachment({ session: crypto.randomUUID(), role: null, deadline, windowStart: Date.now(), messages: 0 } satisfies Attachment);
-        const scheduled = await this.ctx.storage.getAlarm();
-        if (scheduled === null || scheduled > deadline) await this.ctx.storage.setAlarm(deadline);
+        await this.scheduleAlarm();
         return new Response(null, { status: 101, webSocket: client });
       }
       if (path === '/media' && request.method === 'POST') return await this.upload(request);
@@ -111,6 +113,27 @@ export class Room extends DurableObject<Env> {
     this.send(ws, { t, state: this.state!, role, serverNow: Date.now() });
     if (role === 'editor') { this.historyStatus(ws); this.send(ws, { t: 'clipboard', count: this.clipboard(ws).items.length }); }
   }
+  private async scheduleAlarm() {
+    const deadlines = this.ctx.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN)
+      .map(ws => ws.deserializeAttachment() as Attachment).filter(a => !a.role).map(a => a.deadline);
+    const jobs = this.ctx.storage.sql.exec<{ next_attempt: number }>('SELECT next_attempt FROM media_deletions ORDER BY next_attempt LIMIT 1').toArray();
+    if (jobs.length) deadlines.push(jobs[0].next_attempt);
+    if (deadlines.length) await this.ctx.storage.setAlarm(Math.max(Date.now(), Math.min(...deadlines)));
+    else await this.ctx.storage.deleteAlarm();
+  }
+  private async flushDeletedMedia() {
+    const jobs = this.ctx.storage.sql.exec<{ id: string; attempts: number }>('SELECT id, attempts FROM media_deletions WHERE next_attempt<=? LIMIT 20', Date.now()).toArray();
+    await Promise.all(jobs.map(async job => {
+      try {
+        await this.env.MEDIA.delete(`rooms/${this.state!.roomId}/${job.id}`);
+        this.ctx.storage.sql.exec('DELETE FROM media_deletions WHERE id=?', job.id);
+      } catch {
+        const delay = Math.min(3600000, 10000 * 2 ** Math.min(job.attempts, 9));
+        this.ctx.storage.sql.exec('UPDATE media_deletions SET attempts=attempts+1, next_attempt=? WHERE id=?', Date.now() + delay, job.id);
+      }
+    }));
+    await this.scheduleAlarm();
+  }
   async alarm() {
     for (const ws of this.ctx.getWebSockets()) {
       const a = ws.deserializeAttachment() as Attachment;
@@ -119,9 +142,7 @@ export class Room extends DurableObject<Env> {
         ws.close(4001, 'Autenticación requerida');
       }
     }
-    const pending = this.ctx.getWebSockets().filter(ws => ws.readyState === WebSocket.OPEN)
-      .map(ws => ws.deserializeAttachment() as Attachment).filter(a => !a.role && a.deadline > Date.now());
-    if (pending.length) await this.ctx.storage.setAlarm(Math.min(...pending.map(a => a.deadline)));
+    await this.flushDeletedMedia();
   }
 
   async webSocketMessage(ws: WebSocket, data: string | ArrayBuffer) {
@@ -153,7 +174,20 @@ export class Room extends DurableObject<Env> {
       if (a.role !== 'editor') throw new HttpError(403, 'Este enlace solo permite visualizar.');
       const state = this.state!;
       const commit = (op: Operation, requestId?: string) => this.commit(op, requestId, ws);
-      if (msg.t === 'stage.resize') {
+      if (msg.t === 'media.rename' || msg.t === 'media.remove') {
+        const media = state.media.find(m => m.id === msg.id);
+        if (!media) throw new HttpError(404, 'El archivo ya no está disponible.');
+        if (msg.t === 'media.rename') commit({ t: 'media.rename', id: msg.id, name: msg.name }, msg.requestId);
+        else {
+          if (mediaUsage(state.items, msg.id)) throw new HttpError(409, 'El archivo está en uso. Elimina sus elementos del escenario, incluidos los ocultos, antes de borrarlo.');
+          // Removing the catalog entry and queuing byte deletion are one durable
+          // transaction. New items, clipboard paste and undo cannot revive it.
+          this.commit({ t: 'media.remove', id: msg.id }, msg.requestId, ws, undefined,
+            () => this.ctx.storage.sql.exec('INSERT OR IGNORE INTO media_deletions VALUES (?, 0, ?)', msg.id, Date.now()));
+          await this.scheduleAlarm();
+          this.ctx.waitUntil(this.flushDeletedMedia());
+        }
+      } else if (msg.t === 'stage.resize') {
         commit({ t: 'stage.set', stage: { ...state.stage, w: msg.w, h: msg.h } }, msg.requestId);
       } else if (msg.t === 'clipboard.copy') {
         const items = state.items.filter(i => msg.ids.includes(i.id));
@@ -172,6 +206,11 @@ export class Room extends DurableObject<Env> {
         const history = this.history(ws), direction = msg.t === 'history.undo' ? 'undo' : 'redo';
         const entry = history[direction].at(-1);
         if (!entry) throw new HttpError(409, 'No hay cambios para deshacer o rehacer en esta sesión.');
+        const restoredItems = direction === 'undo' ? entry.before : entry.after;
+        if (restoredItems.some(i => 'mediaId' in i && !state.media.some(m => m.id === i.mediaId))) {
+          this.saveHistory(ws, { undo: [], redo: [] }); this.historyStatus(ws);
+          throw new HttpError(409, 'El historial necesita un archivo eliminado de la biblioteca. Se reinició para evitar restaurar elementos incompletos.');
+        }
         const op = historyOperation(state, entry, direction);
         if (!op) {
           this.saveHistory(ws, { undo: [], redo: [] }); this.historyStatus(ws);

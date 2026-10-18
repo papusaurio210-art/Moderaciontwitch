@@ -101,7 +101,15 @@ try {
   const grouped = await socket(page, room);
   await socket(page, room, { t: 'items.move', ids: grouped.items.filter(i => i.type === 'shape').map(i => i.id), dx: 25, dy: -10 });
   await socket(page, room, { t: 'stage.resize', w: 1080, h: 1920 });
-  const before = await socket(page, room); assert.equal(before.rev, 25);
+  await socket(page, room, { t: 'media.rename', id: media.id, name: 'Imagen persistente.png' });
+  const unusedUpload = await fetch(`${origin}/api/rooms/${room.roomId}/media`, {
+    method: 'POST', headers: { Authorization: `Bearer ${room.editorKey}`, 'X-Image-Width': '32', 'X-Image-Height': '32' }, body: image,
+  });
+  assert.equal(unusedUpload.status, 201); const unused = await unusedUpload.json();
+  await socket(page, room, { t: 'media.remove', id: unused.id });
+  const before = await socket(page, room); assert.equal(before.rev, 28);
+  assert.equal(before.media.find(file => file.id === media.id).name, 'Imagen persistente.png');
+  assert.equal(before.media.some(file => file.id === unused.id), false);
   assert.equal(before.stage.w, 1080); assert.equal(before.stage.h, 1920);
   assert.equal(before.items.filter(item => item.type === 'shape').length, 4);
   assert.equal(before.items.find(item => item.type === 'video').playing, false);
@@ -109,6 +117,13 @@ try {
   await page.close(); await stop(); await start();
   const restoredPage = await browser.newPage(); await restoredPage.goto(origin);
   assert.deepEqual(await socket(restoredPage, room), before, 'La sala debe conservarse tras reiniciar el proceso.');
+  let deletedStatus;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    deletedStatus = (await fetch(`${origin}/media/${room.roomId}/${unused.id}`, { method: 'HEAD', cache: 'no-store' })).status;
+    if (deletedStatus === 404) break;
+    await delay(250);
+  }
+  assert.equal(deletedStatus, 404, 'El archivo eliminado no debe reaparecer tras reiniciar.');
   await restoredPage.goto(`${origin}/overlay/${room.roomId}?k=${room.viewerKey}`);
   const stopwatch = before.items.find(item => item.type === 'timer' && item.kind === 'stopwatch');
   const display = restoredPage.locator(`[data-item-id="${stopwatch.id}"] .item-timer`);
@@ -130,7 +145,7 @@ try {
     const body = await (await fetch(origin + path)).text();
     assert.ok(!body.includes(admin) && !body.includes('export interface Env'), 'Los archivos privados no deben servirse.');
   }
-  console.log('OK: medios, texto, figuras movidas en grupo, escenario vertical, cuenta pausada y cronómetro activo recuperados tras reiniciar; reloj, cabeceras y archivos privados verificados.');
+  console.log('OK: biblioteca renombrada y depurada, medios, texto, figuras movidas en grupo, escenario vertical, cuenta pausada y cronómetro activo recuperados tras reiniciar; reloj, cabeceras y archivos privados verificados.');
 } finally {
   await browser?.close(); await stop(); await rm(statePath, { recursive: true, force: true });
 }
