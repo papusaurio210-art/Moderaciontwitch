@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHANNELS_KEY, changeChannels, channelPath, parseEditorLink, readChannels, sortedChannels } from '../../src/client/channels';
+import { CHANNELS_KEY, changeChannels, channelPath, parseEditorLink, readChannels, sortedChannels } from '../../src/client/channel-storage';
 const origin = 'https://studio.example', roomId = 'a'.repeat(32), editorKey = 'b'.repeat(64);
 const target = { roomId, editorKey }, add = { type: 'add' as const, ...target, name: '  Canal de Ana  ' };
 function store(initial: string | null = null) {

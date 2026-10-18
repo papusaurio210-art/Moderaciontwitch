@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowUpRight, BookmarkPlus, ExternalLink, Pencil, Search, Star, Trash2, Users, X } from 'lucide-react';
-import { channelName, channelPath, parseEditorLink, sortedChannels, verifyEditor, type Channel } from './channels';
+import { channelName, channelPath, parseEditorLink, sortedChannels, verifyEditor, type Channel } from './channel-storage';
 import { saveChannelAction, useChannels } from './useChannels';
 
 type Dialog = { mode: 'add' | 'rename' | 'remove'; channel?: Channel; current?: { roomId: string; editorKey: string; name: string } };

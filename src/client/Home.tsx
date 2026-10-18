@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { ArrowRight, Layers, Monitor, ShieldCheck } from 'lucide-react';
 import { Brand } from './components';
 import { Channels } from './Channels';
-import { channelPath } from './channels';
+import { channelPath } from './channel-storage';
 import { saveChannelAction } from './useChannels';
 
 export function Home() {

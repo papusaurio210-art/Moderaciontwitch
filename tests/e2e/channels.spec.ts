@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { admin, createRoom, panelUrl, overlayUrl, socketRequest, type Room } from './helpers';
-import { CHANNELS_KEY } from '../../src/client/channels';
+import { CHANNELS_KEY } from '../../src/client/channel-storage';
 async function addChannel(page: Page, room: Room, name: string) {
   await page.getByRole('button', { name: 'Agregar canal existente' }).click();
   await page.getByLabel('Nombre para tu lista').fill(name);

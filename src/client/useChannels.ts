@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CHANNELS_EVENT, CHANNELS_KEY, changeChannels, readChannels, type Channel, type ChannelAction } from './channels';
+import { CHANNELS_EVENT, CHANNELS_KEY, changeChannels, readChannels, type Channel, type ChannelAction } from './channel-storage';
 export function localChannels() {
   try { return { channels: readChannels(localStorage), error: '' }; }
   catch (error) { return { channels: [] as Channel[], error: error instanceof Error && error.message.startsWith('No se pudo leer') ? error.message : 'El navegador no permite leer los canales guardados. Puedes seguir usando tus enlaces de edición.' }; }
