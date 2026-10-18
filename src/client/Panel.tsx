@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Grid2X2, Hand,
   Image as ImageIcon, ImagePlus, Keyboard, Layers, Link, LoaderCircle, LockKeyhole, Maximize, Minus,
-  MousePointer2, PanelRight, Plus, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer, Undo2, Redo2, Magnet, ClipboardPaste } from 'lucide-react';
+  MousePointer2, PanelRight, Plus, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer, Undo2, Redo2, Magnet, ClipboardPaste, Users } from 'lucide-react';
 import { clamp, shapeDefaults, type ItemPatch, type ShapeKind, type TimerKind } from '../shared/model';
 import { viewerKeyFromEditor } from '../shared/keys';
 import { Brand, ConnectionBadge, ViewerCount, ItemIcon } from './components';
@@ -12,6 +12,7 @@ import { TimerProperties } from './TimerProperties';
 import { StageSettings } from './StageSettings';
 import { SelectionTools } from './SelectionTools';
 import { Library } from './Library';
+import { SaveCurrentChannel } from './Channels';
 import { inspectFile } from './media';
 
 function Tool({ label, active, onClick, children, disabled }: { label: string; active?: boolean; onClick: () => void; children: ReactNode; disabled?: boolean }) {
@@ -51,7 +52,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   useEffect(() => { if (!notice) return; const timer = setTimeout(() => setNotice(''), 3200); return () => clearTimeout(timer); }, [notice]);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if ((event.target as HTMLElement).closest('[role=dialog]') || /INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName) || help || links || stageSettings) return;
+      if (document.querySelector('[role=dialog]') || /INPUT|TEXTAREA|SELECT/.test((event.target as HTMLElement).tagName) || help || links || stageSettings) return;
       if ((event.ctrlKey || event.metaKey) && event.key === '0') { event.preventDefault(); setFitSignal(n => n + 1); }
       if (event.key === 'Escape') setSelection([]);
       if (!enabled) return;
@@ -141,7 +142,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
         <span className="rail-divider" />
         <Tool label="Añadir cuenta regresiva" onClick={() => addTimer('countdown')} disabled={!enabled}><Hourglass size={20} /></Tool>
         <Tool label="Añadir cronómetro" onClick={() => addTimer('stopwatch')} disabled={!enabled}><Timer size={20} /></Tool>
-        <div className="rail-bottom"><Tool label="Atajos de teclado" onClick={() => setHelp(true)}><Keyboard size={19} /></Tool></div>
+        <div className="rail-bottom"><a className="icon-button" href="/" target="_blank" rel="noopener noreferrer" aria-label="Mis canales" title="Mis canales (otra pestaña)"><Users size={19} /></a><SaveCurrentChannel roomId={state.roomId} editorKey={editorKey} name={state.name} enabled={enabled} /><Tool label="Atajos de teclado" onClick={() => setHelp(true)}><Keyboard size={19} /></Tool></div>
       </nav>
       <aside className="library-panel"><div className="sidebar-tabs" role="tablist" aria-label="Contenido del estudio">
         <button role="tab" aria-selected={tab === 'library'} className={tab === 'library' ? 'selected' : ''} onClick={() => setTab('library')}><ImageIcon size={15} />Biblioteca</button>

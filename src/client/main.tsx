@@ -13,6 +13,7 @@ import '@fontsource/jetbrains-mono/latin-400-italic.css';
 import '@fontsource/jetbrains-mono/latin-700-italic.css';
 import './styles.css';
 import './media.css';
+import './channels.css';
 import { Home } from './Home';
 import { Panel } from './Panel';
 import { Overlay } from './Overlay';

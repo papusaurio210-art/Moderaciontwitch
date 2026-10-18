@@ -5,6 +5,7 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 ## Funciones disponibles
 
 - Crear salas protegidas con una clave de administración.
+- Guardar accesos en **Mis canales**, con nombres locales, favoritos, búsqueda y apertura de varios editores en pestañas independientes.
 - Compartir enlaces distintos para editar y visualizar. El visor no puede modificar la sala.
 - Subir PNG, JPG, WebP, GIF animados, MP4 y WebM, reutilizarlos desde la biblioteca y organizarlos por capas.
 - Buscar y filtrar la biblioteca por tipo y uso, renombrar archivos y eliminar los que no estén en el escenario con confirmación.
@@ -20,6 +21,18 @@ Editor colaborativo de overlays para OBS. El streamer añade una **Fuente de nav
 - Conservar las operaciones confirmadas en SQLite de Durable Objects y los archivos en R2.
 
 La aplicación funciona localmente sin una cuenta de Cloudflare. El usuario ha confirmado el funcionamiento del overlay de imágenes en OBS; los GIF, vídeos, textos, figuras y temporizadores se validan automáticamente en Chromium y requieren también comprobación en su instalación de OBS. El despliegue público queda pendiente. Todavía no incluye chat de Twitch, gestión de usuarios ni revocación de enlaces.
+
+## Mis canales: perfiles locales
+
+La página de inicio permite guardar hasta **100 canales por navegador e instalación**, buscar por nombre, marcar favoritos y renombrar sus accesos. Los favoritos aparecen primero y después se priorizan las aperturas recientes desde la lista. Cada tarjeta ofrece **Abrir editor** y **Abrir en otra pestaña** para controlar varias salas al mismo tiempo. Cada sala mantiene sus propios elementos y archivos; cada streamer utiliza su propio enlace de overlay en OBS.
+
+Para agregar una sala existente, pulsa **Agregar canal existente**, elige un nombre para tu lista y pega su enlace privado de edición. La aplicación comprueba el acceso con el servidor antes de guardarlo; no acepta enlaces de OBS, Twitch ni otra instalación. También puedes abrir directamente un panel y pulsar **Guardar en Mis canales**, en la parte inferior de la barra izquierda. Abrir un enlace por sí solo no lo guarda. Las salas creadas desde el inicio se agregan automáticamente; si el navegador impide guardarlas, se muestra el error y un enlace para abrir la sala ya creada, sin crear otra.
+
+El botón **Mis canales** del panel abre la lista en otra pestaña para conservar el editor actual. Renombrar un acceso solo modifica tu lista, no el nombre de la sala. **Quitar acceso** requiere confirmación y elimina únicamente esa entrada local: la sala, sus archivos y el overlay siguen funcionando. Quitar un acceso no revoca el enlace de edición.
+
+La lista se almacena en `localStorage`, incluye los enlaces privados de edición y se actualiza entre pestañas del mismo navegador. Quien use ese perfil del navegador puede abrir los canales guardados. No se guarda la clave de administración ni se copian los archivos o el estado de las salas al perfil local. Las salas y sus medios continúan en el almacenamiento del servidor.
+
+Conserva tus enlaces: borrar los datos del sitio, usar otro navegador/equipo o cambiar de dirección web (incluido pasar de localhost al dominio público) no traslada esta lista. Puedes volver a agregar los enlaces en la instalación correspondiente. No incluye cuentas personales, sincronización entre dispositivos, exportación/importación de perfiles ni integración con permisos de Twitch. Si la lista local está dañada o su formato no se reconoce, se muestra un aviso y se conserva su contenido sin sobrescribirlo; los enlaces directos siguen disponibles.
 
 ## Biblioteca de archivos
 
