@@ -4,7 +4,7 @@ Publicada el 18 de octubre de 2026:
 
 **https://stream-overlay-studio.willicer1313.workers.dev**
 
-La aplicación desplegada corresponde al código de `8da0d71`. Se utilizó Wrangler 4.151.0, integrado en el proyecto. No se utilizó la instalación de `cf` del equipo Windows del usuario.
+La publicación inicial correspondió al código de `8da0d71`. Se utilizó Wrangler 4.151.0, integrado en el proyecto. Las actualizaciones posteriores se publican desde GitHub mediante Workers Builds, como se describe abajo. No se utilizó la instalación de `cf` del equipo Windows del usuario.
 
 ## Recursos
 

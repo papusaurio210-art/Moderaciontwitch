@@ -36,6 +36,10 @@ Conserva tus enlaces: borrar los datos del sitio, usar otro navegador/equipo o c
 
 ## Biblioteca de archivos
 
+Al subir una imagen, GIF o vídeo, se añade a la biblioteca y al lienzo infinito **fuera del rectángulo que se transmite**. El editor ajusta la vista para mostrar el archivo junto al escenario. Esto también se aplica al soltar un archivo nuevo encima del rectángulo: primero queda fuera. Arrastra el elemento dentro cuando quieras mostrarlo en OBS. Los vídeos exteriores permanecen pausados y silenciados en el editor y no se montan en el visor. Los archivos de un lote se distribuyen sin superponerse con los elementos que ya están cargados.
+
+Para reutilizar un archivo existente, el clic en su tarjeta sigue siendo una acción explícita de añadirlo al escenario; también puedes arrastrar la tarjeta a la posición deseada.
+
 Combina la búsqueda por nombre con los filtros **Tipo** (imágenes, GIF o vídeos) y **Uso** (en uso o sin uso). Los filtros se conservan al alternar entre Biblioteca y Capas durante la sesión. **Limpiar filtros** permite recuperar la lista completa si no hay resultados. Cada archivo muestra cuántos elementos lo utilizan, incluidos los ocultos.
 
 El lápiz permite **renombrar el archivo** en la biblioteca; los nombres de las capas existentes se conservan. La papelera muestra una confirmación con el nombre y tamaño. Solo puedes **eliminar definitivamente** archivos que no utilice ningún elemento del escenario: primero elimina sus capas, incluidas las ocultas. Quitar una capa por sí solo conserva su archivo para reutilizarlo.
@@ -109,6 +113,8 @@ npm.cmd run dev
 Después recarga el panel y actualiza la fuente de navegador en OBS. Conserva `.dev.vars`, `.wrangler/state` y los enlaces de tu sala. Las imágenes y salas de la primera entrega siguen siendo compatibles; no se necesita volver a crearlas. Actualiza panel y visor juntos, porque el visor anterior solo conoce imágenes.
 
 ## Texto, GIF y vídeo
+
+Al seleccionar un elemento, los cuatro controles de los lados permiten cambiar ancho y alto por separado. En imágenes, GIF y vídeos esto activa el ajuste **Estirar** para deformar el contenido junto con su marco. Las cuatro esquinas conservan las proporciones; mantén **Shift** al arrastrar una esquina para cambiar ambos tamaños libremente. El lado o esquina opuestos permanecen fijos, incluso en elementos rotados. Se puede deshacer y rehacer el cambio.
 
 Pulsa **Añadir texto** (icono T de la barra izquierda). Selecciona el texto y edita su contenido y apariencia desde Propiedades. Se permiten varias líneas y hasta 4000 caracteres; el texto se recorta a su caja, por lo que debes aumentar su alto si necesitas más líneas. Inter y JetBrains Mono se sirven desde la aplicación; Arial y Georgia dependen de las fuentes del equipo. El contenido se representa como texto, sin interpretar HTML.
 

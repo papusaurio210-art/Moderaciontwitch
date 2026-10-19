@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createRoom, socketRequest, panelUrl, overlayUrl } from './helpers';
+import { moveSelectedToStage, createRoom, socketRequest, panelUrl, overlayUrl } from './helpers';
 import type { RoomState, VideoItem } from '../../src/shared/model';
 
 test('volumen por vídeo: audio real, barra, silencio, sincronización y persistencia', async ({ page, context, request }) => {
@@ -11,6 +11,8 @@ test('volumen por vídeo: audio real, barra, silencio, sincronización y persist
   // OBS's browser source handles playback under its own policy.
   await viewer.mouse.click(10, 10);
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/tone.webm');
+  // Keep the first video separate from the library's explicit insertion point (120, 120).
+  await moveSelectedToStage(page, { X: 400, Y: 300 });
   const video = viewer.locator('.overlay-item video');
   await expect(video).toHaveJSProperty('paused', false);
   await expect(video).toHaveJSProperty('muted', true);
@@ -84,6 +86,7 @@ test('vídeos antiguos sin volumen usan 100 % y el texto rechaza propiedades de 
   const room = await createRoom(request); await page.goto(panelUrl(room));
   await expect(page.getByText('Conectado', { exact: true })).toBeVisible();
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/motion.mp4');
+  await moveSelectedToStage(page);
   await expect(page.locator('.canvas-item video')).toBeVisible();
   // Simulate the persisted snapshot schema used by rooms before this feature.
   const legacy = await context.newPage();

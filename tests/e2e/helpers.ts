@@ -4,6 +4,16 @@ export const admin = readFileSync('.dev.vars', 'utf8').match(/^ADMIN_SECRET=(.+)
 export type Room = { roomId: string; editorKey: string; viewerKey: string };
 export const panelUrl = (room: Room) => `/panel/${room.roomId}#key=${room.editorKey}`;
 export const overlayUrl = (room: Room) => `/overlay/${room.roomId}?k=${room.viewerKey}`;
+// Uploads now wait outside the broadcast area; tests of on-air media explicitly place them inside.
+export async function moveSelectedToStage(page: Page, position = { X: 120, Y: 120 }) {
+  await expect(page.locator('.canvas-item.selected')).toHaveCount(1);
+  for (const [axis, value] of Object.entries(position)) {
+    const input = page.getByRole('spinbutton', { name: axis, exact: true });
+    await input.fill(String(value)); await input.press('Enter');
+    await expect(input).toHaveValue(String(value));
+    await expect(page.getByText('Cambios guardados', { exact: true })).toBeVisible();
+  }
+}
 export async function createRoom(request: APIRequestContext): Promise<Room> {
   const response = await request.post('/api/rooms', { headers: { Authorization: `Bearer ${admin}` }, data: { name: 'Canal de prueba' } });
   expect(response.status()).toBe(201); return response.json();

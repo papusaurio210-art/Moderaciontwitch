@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { EyeOff, ImagePlus, LockKeyhole, Scan, Upload } from 'lucide-react';
-import { clamp, intersectsStage, type Item, type ItemPatch } from '../shared/model';
+import { clamp, intersectsStage, type Item, type ItemPatch, type Stage } from '../shared/model';
+import { resizeItem, type ResizeHandle } from '../shared/canvas-geometry';
 import { snapMove, type SnapResult } from '../shared/snapping';
 import { boundsOf, moveItems, selectionBounds } from '../shared/editing';
 import { ItemContent, itemStyle } from './components';
@@ -11,11 +12,24 @@ interface Props {
   room: RoomConnection; selectedIds: string[]; setSelection: React.Dispatch<React.SetStateAction<string[]>>;
   view: View; setView: React.Dispatch<React.SetStateAction<View>>;
   grid: boolean; snap: boolean; hand: boolean; fitSignal: number;
+  revealUpload: Stage | null;
   upload: (files: FileList | File[], at?: { x: number; y: number }) => void; chooseFile: () => void;
 }
 
-export function Canvas({ room, selectedIds, setSelection, view, setView, grid, snap, hand, fitSignal, upload, chooseFile }: Props) {
+const handles: { handle: ResizeHandle; className: string; label: string }[] = [
+  { handle: 'nw', className: 'tl', label: 'Redimensionar desde la esquina superior izquierda' },
+  { handle: 'ne', className: 'tr', label: 'Redimensionar desde la esquina superior derecha' },
+  { handle: 'sw', className: 'bl', label: 'Redimensionar desde la esquina inferior izquierda' },
+  { handle: 'se', className: 'br', label: 'Redimensionar elemento' },
+  { handle: 'n', className: 'edge top', label: 'Estirar desde arriba' },
+  { handle: 's', className: 'edge bottom', label: 'Estirar desde abajo' },
+  { handle: 'w', className: 'edge left', label: 'Estirar desde la izquierda' },
+  { handle: 'e', className: 'edge right', label: 'Estirar desde la derecha' },
+];
+
+export function Canvas({ room, selectedIds, setSelection, view, setView, grid, snap, hand, fitSignal, revealUpload, upload, chooseFile }: Props) {
   const canvas = useRef<HTMLDivElement>(null);
+  const lastRevealed = useRef<Stage | null>(null);
   const viewRef = useRef(view); viewRef.current = view;
   const [guides, setGuides] = useState<Pick<SnapResult, 'x' | 'y'>>({});
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -35,6 +49,16 @@ export function Canvas({ room, selectedIds, setSelection, view, setView, grid, s
     const observer = new ResizeObserver(fit); if (canvas.current) observer.observe(canvas.current);
     return () => observer.disconnect();
   }, [fit]);
+  useEffect(() => {
+    const node = canvas.current; if (!node || !revealUpload || lastRevealed.current === revealUpload) return;
+    lastRevealed.current = revealUpload;
+    const left = Math.min(state.stage.x, revealUpload.x), top = Math.min(state.stage.y, revealUpload.y);
+    const right = Math.max(state.stage.x + state.stage.w, revealUpload.x + revealUpload.w);
+    const bottom = Math.max(state.stage.y + state.stage.h, revealUpload.y + revealUpload.h);
+    const zoom = clamp(Math.min(viewRef.current.zoom, (node.clientWidth - 112) / (right - left), (node.clientHeight - 140) / (bottom - top)), .08, 2);
+    setView({ zoom, x: (node.clientWidth - (right - left) * zoom) / 2 - left * zoom,
+      y: (node.clientHeight - (bottom - top) * zoom) / 2 - top * zoom });
+  }, [revealUpload, setView, state.stage]);
   useEffect(() => {
     const down = (e: KeyboardEvent) => { if (e.code === 'Space' && !/INPUT|TEXTAREA/.test((e.target as HTMLElement).tagName)) { e.preventDefault(); setSpace(true); } };
     const up = (e: KeyboardEvent) => { if (e.code === 'Space') setSpace(false); };
@@ -58,7 +82,7 @@ export function Canvas({ room, selectedIds, setSelection, view, setView, grid, s
     if (field instanceof HTMLElement && field.matches('input, textarea, select')) field.blur();
   }
 
-  function dragItem(event: ReactPointerEvent, item: Item, mode: 'move' | 'resize' | 'rotate' = 'move') {
+  function dragItem(event: ReactPointerEvent, item: Item, mode: 'move' | 'resize' | 'rotate' = 'move', handle: ResizeHandle = 'se') {
     if (hand || space || event.button === 1) return;
     event.stopPropagation();
     if (!enabled || event.button !== 0) return;
@@ -87,15 +111,7 @@ export function Canvas({ room, selectedIds, setSelection, view, setView, grid, s
         return;
       }
       if (mode === 'resize') {
-        const a = item.rot * Math.PI / 180;
-        const localDx = dx * Math.cos(a) + dy * Math.sin(a);
-        const localDy = -dx * Math.sin(a) + dy * Math.cos(a);
-        const maxWidth = Math.min(16384, 16384 * item.w / item.h);
-        const width = clamp(item.w + localDx, 1, e.shiftKey ? 16384 : maxWidth);
-        const height = e.shiftKey ? clamp(item.h + localDy, 1, 16384) : width * item.h / item.w;
-        const dw = width - item.w, dh = height - item.h;
-        patch = { w: width, h: height, x: item.x + (dw * Math.cos(a) - dh * Math.sin(a) - dw) / 2,
-          y: item.y + (dw * Math.sin(a) + dh * Math.cos(a) - dh) / 2 };
+        patch = resizeItem(item, handle, dx, dy, e.shiftKey);
       }
       if (mode === 'rotate') {
         const x = (e.clientX - bounds.left - view.x) / zoom - item.x - item.w / 2;
@@ -178,8 +194,9 @@ export function Canvas({ room, selectedIds, setSelection, view, setView, grid, s
         {selectedIds.includes(item.id) && <>
           <div className="selection-border" style={{ borderWidth: 1.5 / view.zoom }} />
           <div className="selection-label">{item.locked && <LockKeyhole size={10} />}{!intersectsStage(item, state.stage) ? 'Fuera del escenario' : item.name}</div>
-          {!item.locked && selectedIds.length === 1 && <><i className="corner tl" /><i className="corner tr" /><i className="corner bl" />
-            <button aria-label="Redimensionar elemento" className="corner br resize-handle" onPointerDown={e => dragItem(e, item, 'resize')} />
+          {!item.locked && selectedIds.length === 1 && <>
+            {handles.map(h => <button key={h.handle} aria-label={h.label} title={h.label} disabled={!enabled}
+              className={`corner resize-handle ${h.className}`} onPointerDown={e => dragItem(e, item, 'resize', h.handle)} />)}
             <button aria-label="Rotar elemento" className="rotate-handle" onPointerDown={e => dragItem(e, item, 'rotate')} />
           </>}
           <span className="selection-measures">{Math.round(item.w)} × {Math.round(item.h)} · {Math.round(item.rot)}°</span>

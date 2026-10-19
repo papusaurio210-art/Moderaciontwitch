@@ -6,6 +6,7 @@ import { alignItems, selectionBounds, moveItems, historyEntry, historyOperation,
 import { mediaUsage } from '../shared/library';
 import { copyItems, pasteItems } from '../shared/clipboard';
 import { controlTimer } from '../shared/timers';
+import { initialMediaSize } from '../shared/canvas-geometry';
 import { sha256 } from '../shared/keys';
 import { bearer, HttpError, json, smallJson } from './http';
 import { clientMessage, mediaMime, MAX_IMAGE_BYTES, MAX_VIDEO_BYTES, MAX_ROOM_BYTES } from './validation';
@@ -260,9 +261,8 @@ export class Room extends DurableObject<Env> {
         if (state.items.length >= 500) throw new HttpError(409, 'Límite de 500 elementos alcanzado.');
         const media = state.media.find(m => m.id === msg.mediaId);
         if (!media) throw new HttpError(404, 'El archivo no está disponible.');
-        const scale = Math.min(1, state.stage.w / 2 / media.width);
         const base = { id: crypto.randomUUID(), mediaId: media.id, name: media.name,
-          x: msg.x, y: msg.y, w: media.width * scale, h: media.height * scale, rot: 0,
+          x: msg.x, y: msg.y, ...initialMediaSize(state.stage, media), rot: 0,
           opacity: 1, visible: true, locked: false, fit: 'contain' as const };
         const item: Item = media.mime.startsWith('video/')
           ? { ...base, type: 'video', loop: true, muted: true, volume: 1, playing: true, position: 0, startedAt: Date.now() }

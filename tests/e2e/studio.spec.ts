@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
-import { admin, createRoom, socketRequest, png, upload, panelUrl, overlayUrl, type Room } from './helpers';
+import { moveSelectedToStage, admin, createRoom, socketRequest, png, upload, panelUrl, overlayUrl, type Room } from './helpers';
 import { createHash } from 'node:crypto';
 import type { RoomState } from '../../src/shared/model';
 
@@ -18,6 +18,7 @@ test('crear, subir, mover, recortar y recuperar el overlay en otro navegador', a
   await viewer.goto(new URL(overlayUrl(room), page.url()).href);
   await expect(viewer.getByTestId('overlay-stage')).toBeVisible();
   await page.locator('input[type=file]').setInputFiles({ name: 'bienvenida.png', mimeType: 'image/png', buffer: await png(page) });
+  await moveSelectedToStage(page);
   await expect(page.locator('.canvas-item')).toHaveCount(1);
   await expect(viewer.locator('.overlay-item img')).toBeVisible();
   await expect(page.getByText('Cambios guardados', { exact: true })).toBeVisible();

@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { createRoom, socketRequest, panelUrl, overlayUrl } from './helpers';
+import { moveSelectedToStage, createRoom, socketRequest, panelUrl, overlayUrl } from './helpers';
 import { videoPosition, type RoomState, type VideoItem } from '../../src/shared/model';
 
 async function number(page: Page, name: string, value: string) {
@@ -70,6 +70,7 @@ test('GIF animado en el overlay y miniatura estática en la biblioteca', async (
   await expect(page.getByText('Conectado', { exact: true })).toBeVisible();
   const viewer = await context.newPage(); await viewer.goto(overlayUrl(room));
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/motion.gif');
+  await moveSelectedToStage(page);
   await expect(viewer.locator('.overlay-item img')).toBeVisible();
   await expect(page.locator('.media-thumb canvas')).toBeVisible();
   const frame = await viewer.locator('.overlay-item img').screenshot();
@@ -94,6 +95,7 @@ for (const extension of ['mp4', 'webm']) test(`vídeo ${extension}: reproducció
   await expect(page.getByText('Conectado', { exact: true })).toBeVisible();
   const viewer = await context.newPage(); await viewer.goto(overlayUrl(room));
   await page.locator('input[type=file]').setInputFiles(`tests/fixtures/motion.${extension}`);
+  await moveSelectedToStage(page);
   const video = viewer.locator('.overlay-item video');
   await expect(video).toBeVisible(); await expect(video).toHaveJSProperty('muted', true);
   await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThan(.5);

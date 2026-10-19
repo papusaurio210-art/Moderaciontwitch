@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, Copy, ExternalLink, Eye, EyeOff, Grid2X2, Hand,
   Image as ImageIcon, ImagePlus, Keyboard, Layers, Link, LoaderCircle, LockKeyhole, Maximize, Minus,
   MousePointer2, PanelRight, Plus, Settings2, Trash2, UnlockKeyhole, Upload, X, Type, Square, Circle, ArrowRight, Hourglass, Timer, Undo2, Redo2, Magnet, ClipboardPaste, Users } from 'lucide-react';
-import { clamp, shapeDefaults, type ItemPatch, type ShapeKind, type TimerKind } from '../shared/model';
+import { clamp, shapeDefaults, type ItemPatch, type ShapeKind, type TimerKind, type Stage } from '../shared/model';
+import { initialMediaSize, occupiedBounds, uploadPlacement } from '../shared/canvas-geometry';
 import { viewerKeyFromEditor } from '../shared/keys';
 import { Brand, ConnectionBadge, ViewerCount, ItemIcon } from './components';
 import { Canvas, type View } from './Canvas';
@@ -21,6 +22,7 @@ function Tool({ label, active, onClick, children, disabled }: { label: string; a
 
 export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: string }) {
   const state = room.state!;
+  const stateRef = useRef(state); stateRef.current = state;
   const [selection, setSelection] = useState<string[]>([]);
   const selectedIds = selection.filter(id => state.items.some(i => i.id === id));
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null;
@@ -33,6 +35,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   const [hand, setHand] = useState(false);
   const [view, setView] = useState<View>({ x: 0, y: 0, zoom: .4 });
   const [fitSignal, setFitSignal] = useState(0);
+  const [revealUpload, setRevealUpload] = useState<Stage | null>(null);
   const [viewerKey, setViewerKey] = useState('');
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState('');
@@ -82,6 +85,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
   async function upload(files: FileList | File[], at?: { x: number; y: number }) {
     if (!enabled || uploading) return;
     setUploading(true); room.setError('');
+    const reserved: Stage[] = [];
     try {
       for (const file of Array.from(files)) {
         const size = await inspectFile(file);
@@ -92,9 +96,15 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
         }, body: file });
         const result = await response.json() as { id: string; error?: string };
         if (!response.ok) throw new Error(result.error || 'No se pudo subir el archivo.');
-        const scale = Math.min(1, state.stage.w / 2 / size.width);
-        const position = at ?? { x: Math.round((state.stage.w - size.width * scale) / 2), y: Math.round((state.stage.h - size.height * scale) / 2) };
-        room.send({ t: 'item.add', mediaId: result.id, ...position });
+        const current = stateRef.current;
+        const position = uploadPlacement(current.stage, initialMediaSize(current.stage, size), [...occupiedBounds(current.items), ...reserved], at);
+        if (room.send({ t: 'item.add', mediaId: result.id, x: position.x, y: position.y })) {
+          reserved.push(position);
+          const x = Math.min(...reserved.map(box => box.x)), y = Math.min(...reserved.map(box => box.y));
+          setRevealUpload({ x, y, w: Math.max(...reserved.map(box => box.x + box.w)) - x,
+            h: Math.max(...reserved.map(box => box.y + box.h)) - y });
+          setNotice('Archivo añadido fuera del escenario. Arrástralo dentro para mostrarlo en el directo.');
+        }
       }
     } catch (error) { room.setError(error instanceof Error ? error.message : 'No se pudo subir el archivo.'); }
     finally { setUploading(false); if (fileInput.current) fileInput.current.value = ''; }
@@ -163,7 +173,7 @@ export function Panel({ room, editorKey }: { room: RoomConnection; editorKey: st
           <Tool label="Alejar" onClick={() => zoomBy(1 / 1.2)}><Minus size={14} /></Tool><span className="zoom-value">{Math.round(view.zoom * 100)}%</span><Tool label="Acercar" onClick={() => zoomBy(1.2)}><Plus size={14} /></Tool>
           <button className="fit-button" title="Ajustar al escenario (Ctrl+0)" onClick={() => setFitSignal(n => n + 1)}><Maximize size={13} /><span>Ajustar</span></button></div>
       </div>
-        <Canvas room={room} selectedIds={selectedIds} setSelection={setSelection} view={view} setView={setView} grid={grid} snap={snap} hand={hand} fitSignal={fitSignal} upload={(files, at) => void upload(files, at)} chooseFile={() => fileInput.current?.click()} />
+        <Canvas room={room} selectedIds={selectedIds} setSelection={setSelection} view={view} setView={setView} grid={grid} snap={snap} hand={hand} fitSignal={fitSignal} revealUpload={revealUpload} upload={(files, at) => void upload(files, at)} chooseFile={() => fileInput.current?.click()} />
         <footer className="canvas-footer"><span className={`save-state ${room.pending || room.status !== 'connected' ? 'pending' : ''}`}>{room.pending ? <LoaderCircle className="spin" size={13} /> : <CheckCheck size={14} />}
           {room.status !== 'connected' ? 'Esperando conexión' : room.pending ? 'Guardando cambios…' : room.isPreviewing ? 'Editando en vivo…' : 'Cambios guardados'}</span>
           <span>{state.items.length} {state.items.length === 1 ? 'elemento' : 'elementos'}<i />{state.stage.w} × {state.stage.h}<span className="footer-transparent"><i />Fondo transparente</span></span></footer>

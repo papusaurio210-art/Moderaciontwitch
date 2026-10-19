@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createRoom, socketRequest, panelUrl, overlayUrl } from './helpers';
+import { moveSelectedToStage, createRoom, socketRequest, panelUrl, overlayUrl } from './helpers';
 import type { RoomState } from '../../src/shared/model';
 
 test('barra de volumen: teclado rápido y arrastre con confirmaciones retrasadas', async ({ page, context, request }) => {
@@ -15,6 +15,7 @@ test('barra de volumen: teclado rápido y arrastre con confirmaciones retrasadas
   await expect(page.getByText('Conectado', { exact: true })).toBeVisible();
   const viewer = await context.newPage(); await viewer.goto(overlayUrl(room));
   await page.locator('input[type=file]').setInputFiles('tests/fixtures/motion.webm');
+  await moveSelectedToStage(page);
   const slider = page.getByRole('slider', { name: 'Volumen del vídeo' });
   const video = viewer.locator('.overlay-item video');
   await expect(slider).toHaveValue('100');

@@ -5,5 +5,13 @@
 
 /* Editor-only visibility guides stay readable independently of content opacity. */
 .canvas-item-content{position:absolute;inset:0;pointer-events:none}
+.corner.resize-handle{pointer-events:auto;width:10px;height:10px;touch-action:none}
+.corner.tl,.corner.br{cursor:nwse-resize}
+.corner.tr,.corner.bl{cursor:nesw-resize}
+.corner.edge.top{left:50%;top:0;cursor:ns-resize}
+.corner.edge.bottom{left:50%;top:100%;cursor:ns-resize}
+.corner.edge.left{left:0;top:50%;cursor:ew-resize}
+.corner.edge.right{left:100%;top:50%;cursor:ew-resize}
+.corner.resize-handle:focus-visible{outline:2px solid #b397ff;outline-offset:3px}
 .hidden-item-border{position:absolute;inset:0;border:1px dashed #9ba5b8;pointer-events:none}
 .hidden-item-label{position:absolute;left:0;top:0;display:flex;align-items:center;gap:5px;padding:4px 6px;background:#252a35ed;color:#d5dbea;border:1px solid #647087;border-radius:3px;font:10px 'Inter',sans-serif;white-space:nowrap;pointer-events:none;transform-origin:top left;transform:scale(var(--handle-scale)) translate(6px,6px)}
