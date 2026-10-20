@@ -32,24 +32,6 @@ Cada estudio tiene un enlace para editar y otro para mostrar el contenido en OBS
 
 El proyecto todavía no incluye cuentas personales, chat de Twitch ni una opción para revocar enlaces compartidos.
 
-## Instalación local
-
-Necesitas Node.js (se recomienda la versión 24) y npm. No hace falta una cuenta de Cloudflare para usarlo localmente.
-
-Desde la carpeta del repositorio, ejecuta:
-
-```sh
-npm ci
-npm run setup:local
-npm run dev
-```
-
-Abre **http://localhost:8787**. El paso `setup:local` crea el archivo `.dev.vars` con la clave `ADMIN_SECRET`: usa ese valor para crear tu primer estudio. Si el archivo ya existe, conserva su configuración.
-
-En Windows, si PowerShell bloquea `npm`, utiliza `npm.cmd` en los mismos comandos.
-
-Conserva `.dev.vars`, la carpeta `.wrangler/state` y tus enlaces para mantener el acceso y los datos de la instalación local. Para que otra persona pueda entrar desde otro equipo, la aplicación debe estar disponible en una dirección accesible para ambos.
-
 ## Más información
 
 - [Guía de instalación en Cloudflare y funcionamiento de la versión publicada](docs/cloudflare-deployment.md).
